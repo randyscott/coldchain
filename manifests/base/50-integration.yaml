@@ -1,0 +1,93 @@
+# =============================================================================
+# Integration Service — FastAPI application
+# MQTT consumer + REST API + Alert Engine
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: integration-config
+  namespace: coldchain
+data:
+  COLDCHAIN_MQTT_HOST: "mosquitto"
+  COLDCHAIN_MQTT_PORT: "1883"
+  COLDCHAIN_MQTT_USERNAME: "coldchain"
+  COLDCHAIN_MQTT_PASSWORD: "coldchain_dev"
+  COLDCHAIN_AUTH_ENABLED: "false"
+  COLDCHAIN_ENVIRONMENT: "development"
+  COLDCHAIN_LOG_LEVEL: "INFO"
+  COLDCHAIN_SMTP_HOST: "mailhog"
+  COLDCHAIN_SMTP_PORT: "1025"
+  COLDCHAIN_API_HOST: "0.0.0.0"
+  COLDCHAIN_API_PORT: "8000"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: integration
+  namespace: coldchain
+  labels:
+    app: integration
+    app.kubernetes.io/part-of: coldchain
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: integration
+  template:
+    metadata:
+      labels:
+        app: integration
+    spec:
+      containers:
+        - name: integration
+          image: coldchain/integration:dev
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: integration-config
+          env:
+            - name: COLDCHAIN_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: timescaledb-credentials
+                  key: DATABASE_URL
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: integration
+  namespace: coldchain
+  labels:
+    app: integration
+    app.kubernetes.io/part-of: coldchain
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  selector:
+    app: integration

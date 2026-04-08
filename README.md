@@ -78,6 +78,6 @@ coldchain/
 - [x] Database schema with TimescaleDB hypertables
 - [x] ChirpStack deployment (network server + gateway bridge)
 - [x] Sensor data simulator (4 sensors with realistic patterns)
-- [ ] Integration service (FastAPI)
+- [x] Integration service (FastAPI — MQTT ingestion, REST API, alert engine)
 - [ ] Keycloak setup
 - [ ] React frontend

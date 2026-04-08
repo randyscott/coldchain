@@ -106,6 +106,33 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Integration Service (FastAPI — MQTT consumer + REST API + Alert Engine)
+  # ---------------------------------------------------------------------------
+  integration:
+    build:
+      context: ./services/integration
+    container_name: coldchain-integration
+    ports:
+      - "8000:8000"   # REST API
+    environment:
+      COLDCHAIN_DATABASE_URL: "postgresql+asyncpg://coldchain:coldchain_dev_password@timescaledb:5432/coldchain"
+      COLDCHAIN_MQTT_HOST: "mosquitto"
+      COLDCHAIN_MQTT_PORT: "1883"
+      COLDCHAIN_MQTT_USERNAME: "coldchain"
+      COLDCHAIN_MQTT_PASSWORD: "coldchain_dev"
+      COLDCHAIN_AUTH_ENABLED: "false"
+      COLDCHAIN_ENVIRONMENT: "development"
+      COLDCHAIN_LOG_LEVEL: "INFO"
+      COLDCHAIN_SMTP_HOST: "mailhog"
+      COLDCHAIN_SMTP_PORT: "1025"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Sensor Simulator (development only)
   # ---------------------------------------------------------------------------
   simulator:
