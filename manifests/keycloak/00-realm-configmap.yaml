@@ -1,0 +1,152 @@
+# =============================================================================
+# Keycloak Realm Configuration — loaded as a ConfigMap
+# To regenerate from the JSON file:
+#   kubectl create configmap keycloak-realm \
+#     --from-file=coldchain-realm.json=config/keycloak/coldchain-realm.json \
+#     -n coldchain --dry-run=client -o yaml > manifests/keycloak/00-realm-configmap.yaml
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+  namespace: coldchain
+data:
+  coldchain-realm.json: |
+    {
+      "realm": "coldchain",
+      "enabled": true,
+      "displayName": "Cold Chain Monitor",
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": true,
+      "sslRequired": "none",
+      "accessTokenLifespan": 300,
+      "ssoSessionIdleTimeout": 1800,
+      "roles": {
+        "realm": [
+          { "name": "admin", "description": "Full access" },
+          { "name": "manager", "description": "Configure and acknowledge alerts" },
+          { "name": "viewer", "description": "Read-only access" }
+        ]
+      },
+      "groups": [
+        {
+          "name": "Demo Organization",
+          "attributes": { "group_id": ["a0000000-0000-0000-0000-000000000001"] }
+        }
+      ],
+      "clients": [
+        {
+          "clientId": "coldchain-api",
+          "enabled": true,
+          "publicClient": false,
+          "bearerOnly": true,
+          "standardFlowEnabled": false,
+          "directAccessGrantsEnabled": true
+        },
+        {
+          "clientId": "coldchain-web",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "rootUrl": "http://localhost:5173",
+          "redirectUris": ["http://localhost:5173/*", "http://localhost:3000/*"],
+          "webOrigins": ["http://localhost:5173", "http://localhost:3000"],
+          "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email", "coldchain-scope"],
+          "protocolMappers": [
+            {
+              "name": "group_id_mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "group_id",
+                "claim.name": "group_id",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "role_mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "role",
+                "claim.name": "role",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            }
+          ]
+        }
+      ],
+      "clientScopes": [
+        {
+          "name": "coldchain-scope",
+          "protocol": "openid-connect",
+          "protocolMappers": [
+            {
+              "name": "group_id",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "group_id",
+                "claim.name": "group_id",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true"
+              }
+            },
+            {
+              "name": "role",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "role",
+                "claim.name": "role",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true"
+              }
+            }
+          ]
+        }
+      ],
+      "users": [
+        {
+          "username": "admin@demo.local",
+          "email": "admin@demo.local",
+          "firstName": "Demo",
+          "lastName": "Admin",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+          "attributes": {
+            "group_id": ["a0000000-0000-0000-0000-000000000001"],
+            "role": ["admin"]
+          },
+          "groups": ["Demo Organization"],
+          "realmRoles": ["admin"]
+        },
+        {
+          "username": "viewer@demo.local",
+          "email": "viewer@demo.local",
+          "firstName": "Demo",
+          "lastName": "Viewer",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [{ "type": "password", "value": "viewer123", "temporary": false }],
+          "attributes": {
+            "group_id": ["a0000000-0000-0000-0000-000000000001"],
+            "role": ["viewer"]
+          },
+          "groups": ["Demo Organization"],
+          "realmRoles": ["viewer"]
+        }
+      ]
+    }

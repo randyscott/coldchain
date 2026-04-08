@@ -7,6 +7,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE DATABASE chirpstack OWNER chirpstack;
     \c chirpstack
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    \c $POSTGRES_DB
+    CREATE USER keycloak WITH PASSWORD 'keycloak_dev_password';
+    CREATE DATABASE keycloak OWNER keycloak;
 EOSQL
 
-echo "ChirpStack database initialized."
+echo "ChirpStack and Keycloak databases initialized."

@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+    background: linear-gradient(135deg, #001d3d 0%, #002d5c 50%, #001529 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-cold-900/60 backdrop-blur-sm border border-cold-700/30 rounded-xl;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-cold-500/40 hover:bg-cold-900/80 hover:shadow-lg hover:shadow-cold-500/5;
+  }
+
+  .status-dot {
+    @apply w-2.5 h-2.5 rounded-full;
+  }
+
+  .status-ok {
+    @apply bg-alert-ok shadow-[0_0_8px_rgba(5,150,105,0.5)];
+  }
+
+  .status-warning {
+    @apply bg-alert-warning shadow-[0_0_8px_rgba(217,119,6,0.5)];
+  }
+
+  .status-critical {
+    @apply bg-alert-critical shadow-[0_0_8px_rgba(220,38,38,0.6)] animate-pulse;
+  }
+
+  .metric-value {
+    @apply text-2xl font-semibold tracking-tight font-mono;
+  }
+
+  .metric-label {
+    @apply text-xs uppercase tracking-wider text-cold-300/70;
+  }
+
+  .nav-link {
+    @apply px-4 py-2 rounded-lg text-sm font-medium text-cold-300 transition-colors
+           hover:text-white hover:bg-cold-800/60;
+  }
+
+  .nav-link-active {
+    @apply nav-link text-white bg-cold-700/50;
+  }
+}

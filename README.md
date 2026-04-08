@@ -79,5 +79,6 @@ coldchain/
 - [x] ChirpStack deployment (network server + gateway bridge)
 - [x] Sensor data simulator (4 sensors with realistic patterns)
 - [x] Integration service (FastAPI — MQTT ingestion, REST API, alert engine)
-- [ ] Keycloak setup
-- [ ] React frontend
+- [x] React frontend (dashboard, system detail, alerts)
+- [ ] Keycloak setup (authentication & RBAC)
+- [ ] Compliance report generation (PDF export)

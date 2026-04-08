@@ -127,6 +127,11 @@ data:
       -- ChirpStack needs pg_trgm extension
       \c chirpstack
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+      -- Create Keycloak database and user
+      \c $POSTGRES_DB
+      CREATE USER keycloak WITH PASSWORD 'keycloak_dev_password';
+      CREATE DATABASE keycloak OWNER keycloak;
     EOSQL
 
     echo "Database initialization complete."
