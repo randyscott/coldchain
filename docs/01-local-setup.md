@@ -11,12 +11,40 @@
 
 ## Step 1: Prepare WSL2
 
+### 1a. Enable Mirrored Networking
+
+WSL2 defaults to NAT networking, which makes it difficult for physical LoRaWAN
+gateways on your LAN to reach services inside WSL2. Mirrored networking gives
+WSL2 the same IP as your Windows host, solving this.
+
+**Requires:** Windows 11 22H2+ with a recent WSL2 version.
+
+On the **Windows side**, create or edit `%USERPROFILE%\.wslconfig`:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+Then restart WSL from an **elevated PowerShell**:
+
+```powershell
+wsl --shutdown
+```
+
+Re-open your Ubuntu terminal.
+
+### 1b. Install Packages and Enable systemd
+
 ```bash
 # Update packages
 sudo apt update && sudo apt upgrade -y
 
 # Install essential tools
 sudo apt install -y curl wget git jq openssl
+
+# Install MQTT client tools (broker package NOT needed — only the clients)
+sudo apt install -y mosquitto-clients
 
 # Verify systemd is enabled (required for k3s)
 # WSL2 on recent Windows builds supports systemd natively
@@ -33,6 +61,19 @@ EOF
 # Then restart WSL from PowerShell: wsl --shutdown
 # Re-open your Ubuntu terminal after restart
 ```
+
+### 1c. Verify Mirrored Networking
+
+```bash
+ip addr show eth0
+```
+
+With mirrored networking, this should show your LAN IP (e.g., `192.168.1.x`)
+rather than a `172.x.x.x` NAT address. If you still see a 172.x address,
+check that `.wslconfig` is in the right location and that you restarted WSL.
+
+> **Note:** If mirrored networking is not available on your Windows build,
+> see the "NAT Networking Fallback" section at the bottom of this document.
 
 ## Step 2: Install k3s
 
@@ -142,13 +183,123 @@ kubectl port-forward svc/redis 6379:6379 -n coldchain &
 You can then connect with standard tools (psql, pgAdmin, MQTT Explorer, etc.)
 from your Windows host via `localhost`.
 
+## Step 8: Connect Physical LoRaWAN Gateways
+
+The ChirpStack Gateway Bridge is exposed as a NodePort service on UDP port
+**31700**. With mirrored networking, your WSL2 instance shares your Windows
+host's LAN IP, so gateways on the same network can reach it directly.
+
+### 8a. Open the Windows Firewall
+
+In an **elevated PowerShell**:
+
+```powershell
+New-NetFirewallRule `
+  -DisplayName "LoRaWAN Gateway Bridge (UDP 31700)" `
+  -Direction Inbound `
+  -Protocol UDP `
+  -LocalPort 31700 `
+  -Action Allow
+```
+
+### 8b. Find Your LAN IP
+
+```bash
+# From WSL2:
+ip addr show eth0 | grep 'inet '
+# e.g., inet 192.168.1.50/24
+```
+
+Or from PowerShell: `ipconfig` and look for your primary adapter's IPv4 address.
+
+### 8c. Configure the Gateway
+
+On your Ezurio RG1xx (or any Semtech Packet Forwarder-based gateway), update
+the packet forwarder configuration:
+
+- **Server address:** your LAN IP (e.g., `192.168.1.50`)
+- **Server port (up):** `31700`
+- **Server port (down):** `31700`
+
+For the RG1xx, this is typically in the web UI under
+**LoRa > Forwarder > Network Server Settings**.
+
+### 8d. Verify Gateway Connectivity
+
+```bash
+# Watch the gateway bridge logs for incoming packets:
+kubectl logs -f deploy/chirpstack-gateway-bridge -n coldchain
+
+# You should see lines like:
+# gateway: received uplink frame  gateway_id=<your-gateway-eui>
+```
+
+You can also check the ChirpStack web UI at http://localhost:8080 — after
+port-forwarding (`kubectl port-forward svc/chirpstack 8080:8080 -n coldchain &`),
+registered gateways will show a "Last seen" timestamp once packets arrive.
+
+### 8e. Troubleshooting
+
+If no packets appear:
+
+1. **Verify firewall:** `Test-NetConnection -ComputerName localhost -Port 31700`
+   from PowerShell (note: this tests TCP, but confirms the port isn't blocked).
+   For UDP, use `nmap -sU -p 31700 localhost` if available.
+
+2. **Verify NodePort is active:**
+   ```bash
+   kubectl get svc chirpstack-gateway-bridge -n coldchain
+   # Should show: 1700:31700/UDP
+   ```
+
+3. **Test from another machine on the LAN:**
+   ```bash
+   # From another Linux box, send a test UDP packet:
+   echo "test" | nc -u <your-lan-ip> 31700
+   ```
+   Check gateway bridge logs for any received data.
+
+4. **Check gateway logs** on the RG1xx web UI for send errors or DNS failures.
+
+5. **Mirrored networking not working?** Verify `.wslconfig` is at
+   `%USERPROFILE%\.wslconfig` (not inside WSL). Run `wsl --shutdown` and
+   reopen. Check `ip addr show eth0` — you need a LAN IP, not 172.x.
+
+---
+
+## NAT Networking Fallback
+
+If mirrored networking is unavailable (older Windows 10 builds), WSL2 uses NAT
+with a private 172.x address. UDP port forwarding from Windows to WSL2 is not
+natively supported by `netsh portproxy` (TCP only).
+
+**Workaround options:**
+
+1. **Run the gateway bridge outside k3s** as a standalone Docker container
+   with host networking:
+   ```bash
+   docker run -d --name gateway-bridge \
+     --network host \
+     -e INTEGRATION__MQTT__AUTH__GENERIC__SERVER="tcp://localhost:1883" \
+     -e INTEGRATION__MQTT__AUTH__GENERIC__USERNAME="chirpstack" \
+     -e INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD="chirpstack_mqtt_dev" \
+     chirpstack/chirpstack-gateway-bridge:4
+   ```
+   This binds UDP 1700 directly. You'll need Mosquitto port-forwarded to
+   localhost:1883 for this to reach the k3s MQTT broker.
+
+2. **Use `socat` on Windows** (via Cygwin or MSYS2) to bridge UDP from
+   the Windows interface to the WSL2 NAT address.
+
+3. **Upgrade to Windows 11** to get mirrored networking support.
+
 ---
 
 ## Next Steps
 
-1. Deploy ChirpStack (see `manifests/chirpstack/`)
+1. Deploy ChirpStack (see `manifests/chirpstack/` and `docs/02-chirpstack-simulator.md`)
 2. Initialize the database schema (see `scripts/init-db.sql`)
-3. Run the sensor simulator (see `scripts/simulator.py`)
+3. Run the sensor simulator (see `docs/02-chirpstack-simulator.md`)
 4. Deploy the integration service
 5. Deploy Keycloak
 6. Deploy the React frontend

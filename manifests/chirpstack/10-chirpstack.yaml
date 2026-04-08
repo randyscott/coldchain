@@ -202,10 +202,14 @@ metadata:
     app: chirpstack-gateway-bridge
     app.kubernetes.io/part-of: coldchain
 spec:
-  type: ClusterIP
+  # NodePort exposes UDP 1700 on the host at port 31700.
+  # Physical LoRaWAN gateways should target <host-lan-ip>:31700.
+  # Requires WSL2 mirrored networking — see docs/01-local-setup.md.
+  type: NodePort
   ports:
     - port: 1700
       targetPort: 1700
+      nodePort: 31700
       protocol: UDP
       name: udp
   selector:
