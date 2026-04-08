@@ -47,6 +47,54 @@ cd services/integration
 This creates a virtual environment, installs dependencies, and starts
 uvicorn with `--reload`. Code changes take effect immediately.
 
+### Deploy to k3s
+
+To run the integration service as a pod inside your k3s cluster instead
+of directly on your machine:
+
+```bash
+# 1. Build the container image
+cd services/integration
+docker build -t coldchain/integration:dev .
+
+# 2. Import the image into k3s
+#    (k3s uses containerd, not Docker, so we pipe the image in)
+docker save coldchain/integration:dev | sudo k3s ctr images import -
+
+# 3. Verify the image is available in k3s
+sudo k3s crictl images | grep integration
+
+# 4. Deploy the manifest
+kubectl apply -f manifests/base/50-integration.yaml
+
+# 5. Wait for the pod to be ready
+kubectl wait --for=condition=Ready pod -l app=integration -n coldchain --timeout=120s
+
+# 6. Check logs to confirm MQTT subscription and data ingestion
+kubectl logs -f deploy/integration -n coldchain
+```
+
+To access the API from your machine:
+
+```bash
+kubectl port-forward svc/integration 8000:8000 -n coldchain &
+curl http://localhost:8000/health
+```
+
+After making code changes, rebuild and redeploy:
+
+```bash
+cd services/integration
+docker build -t coldchain/integration:dev .
+docker save coldchain/integration:dev | sudo k3s ctr images import -
+kubectl rollout restart deploy/integration -n coldchain
+kubectl logs -f deploy/integration -n coldchain
+```
+
+> **Tip:** During active development, the `./run-dev.sh` approach with hot
+> reload is faster than rebuilding the container. Use the k3s deployment
+> when you want to test the full containerized stack end-to-end.
+
 ### Verify It's Working
 
 ```bash
