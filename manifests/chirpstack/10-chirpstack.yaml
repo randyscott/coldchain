@@ -147,6 +147,14 @@ spec:
 # =============================================================================
 # ChirpStack Gateway Bridge
 # Receives UDP from physical gateways and publishes to MQTT.
+#
+# Uses hostNetwork: true so the container binds UDP 1700 directly on the
+# WSL2 network interface. This bypasses k3s NodePort/kube-proxy, which
+# does not reliably handle inbound UDP under WSL2 mirrored networking.
+#
+# Because hostNetwork puts the pod on the host network stack, it cannot
+# resolve k3s service names via cluster DNS. We use the Mosquitto
+# ClusterIP address instead (set via environment variable).
 # =============================================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -166,6 +174,8 @@ spec:
       labels:
         app: chirpstack-gateway-bridge
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: gateway-bridge
           image: chirpstack/chirpstack-gateway-bridge:4
@@ -175,7 +185,7 @@ spec:
               name: udp
           env:
             - name: INTEGRATION__MQTT__AUTH__GENERIC__SERVER
-              value: "tcp://mosquitto:1883"
+              value: "tcp://mosquitto.coldchain.svc.cluster.local:1883"
             - name: INTEGRATION__MQTT__AUTH__GENERIC__USERNAME
               value: "chirpstack"
             - name: INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD
@@ -193,6 +203,8 @@ spec:
               cpu: "250m"
 
 ---
+# Service is retained for internal discoverability, but the gateway bridge
+# is now accessed directly on the host network (UDP 1700), not via this service.
 apiVersion: v1
 kind: Service
 metadata:
@@ -202,14 +214,10 @@ metadata:
     app: chirpstack-gateway-bridge
     app.kubernetes.io/part-of: coldchain
 spec:
-  # NodePort exposes UDP 1700 on the host at port 31700.
-  # Physical LoRaWAN gateways should target <host-lan-ip>:31700.
-  # Requires WSL2 mirrored networking — see docs/01-local-setup.md.
-  type: NodePort
+  type: ClusterIP
   ports:
     - port: 1700
       targetPort: 1700
-      nodePort: 31700
       protocol: UDP
       name: udp
   selector:

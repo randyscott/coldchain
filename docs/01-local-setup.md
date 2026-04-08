@@ -185,9 +185,12 @@ from your Windows host via `localhost`.
 
 ## Step 8: Connect Physical LoRaWAN Gateways
 
-The ChirpStack Gateway Bridge is exposed as a NodePort service on UDP port
-**31700**. With mirrored networking, your WSL2 instance shares your Windows
-host's LAN IP, so gateways on the same network can reach it directly.
+The ChirpStack Gateway Bridge runs with `hostNetwork: true`, meaning it binds
+UDP port **1700** directly on the WSL2 host network interface. This bypasses
+k3s NodePort/kube-proxy, which does not reliably handle inbound UDP under WSL2.
+
+With mirrored networking, gateways on your LAN can reach port 1700 at your
+PC's LAN IP.
 
 ### 8a. Open the Windows Firewall
 
@@ -195,10 +198,10 @@ In an **elevated PowerShell**:
 
 ```powershell
 New-NetFirewallRule `
-  -DisplayName "LoRaWAN Gateway Bridge (UDP 31700)" `
+  -DisplayName "LoRaWAN Gateway Bridge (UDP 1700)" `
   -Direction Inbound `
   -Protocol UDP `
-  -LocalPort 31700 `
+  -LocalPort 1700 `
   -Action Allow
 ```
 
@@ -206,25 +209,32 @@ New-NetFirewallRule `
 
 ```bash
 # From WSL2:
-ip addr show eth0 | grep 'inet '
-# e.g., inet 192.168.1.50/24
+ip addr show eth2 | grep 'inet '
+# e.g., inet 10.27.64.12/23
 ```
 
 Or from PowerShell: `ipconfig` and look for your primary adapter's IPv4 address.
 
-### 8c. Configure the Gateway
+### 8c. Verify the Gateway Bridge is Listening
+
+```bash
+sudo ss -ulnp | grep 1700
+# Should show the gateway-bridge process listening on 0.0.0.0:1700
+```
+
+### 8d. Configure the Gateway
 
 On your Ezurio RG1xx (or any Semtech Packet Forwarder-based gateway), update
 the packet forwarder configuration:
 
-- **Server address:** your LAN IP (e.g., `192.168.1.50`)
-- **Server port (up):** `31700`
-- **Server port (down):** `31700`
+- **Server address:** your LAN IP (e.g., `10.27.64.12`)
+- **Server port (up):** `1700`
+- **Server port (down):** `1700`
 
 For the RG1xx, this is typically in the web UI under
 **LoRa > Forwarder > Network Server Settings**.
 
-### 8d. Verify Gateway Connectivity
+### 8e. Verify Gateway Connectivity
 
 ```bash
 # Watch the gateway bridge logs for incoming packets:
@@ -238,32 +248,39 @@ You can also check the ChirpStack web UI at http://localhost:8080 — after
 port-forwarding (`kubectl port-forward svc/chirpstack 8080:8080 -n coldchain &`),
 registered gateways will show a "Last seen" timestamp once packets arrive.
 
-### 8e. Troubleshooting
+### 8f. Troubleshooting
 
 If no packets appear:
 
-1. **Verify firewall:** `Test-NetConnection -ComputerName localhost -Port 31700`
-   from PowerShell (note: this tests TCP, but confirms the port isn't blocked).
-   For UDP, use `nmap -sU -p 31700 localhost` if available.
-
-2. **Verify NodePort is active:**
+1. **Verify the bridge is listening:**
    ```bash
-   kubectl get svc chirpstack-gateway-bridge -n coldchain
-   # Should show: 1700:31700/UDP
+   sudo ss -ulnp | grep 1700
+   ```
+   If nothing shows, check `kubectl get pods -l app=chirpstack-gateway-bridge -n coldchain`
+   and review pod logs.
+
+2. **Test UDP reachability from Windows PowerShell:**
+   ```powershell
+   $u = New-Object System.Net.Sockets.UdpClient
+   $b = [Text.Encoding]::ASCII.GetBytes("test")
+   $u.Send($b, $b.Length, "10.27.64.12", 1700)
+   $u.Close()
+   ```
+   Check gateway bridge logs — you should see an error about an invalid
+   packet format, which confirms the UDP path is working.
+
+3. **Check firewall:** Verify the rule exists:
+   ```powershell
+   Get-NetFirewallRule -DisplayName "LoRaWAN Gateway Bridge*" | Format-List
    ```
 
-3. **Test from another machine on the LAN:**
-   ```bash
-   # From another Linux box, send a test UDP packet:
-   echo "test" | nc -u <your-lan-ip> 31700
-   ```
-   Check gateway bridge logs for any received data.
+4. **Verify mirrored networking:** `ip addr show eth2` should show your
+   LAN IP, not a 172.x NAT address.
 
-4. **Check gateway logs** on the RG1xx web UI for send errors or DNS failures.
+5. **Check gateway logs** on the RG1xx web UI for send errors or DNS failures.
 
-5. **Mirrored networking not working?** Verify `.wslconfig` is at
-   `%USERPROFILE%\.wslconfig` (not inside WSL). Run `wsl --shutdown` and
-   reopen. Check `ip addr show eth0` — you need a LAN IP, not 172.x.
+6. **Port conflict:** If something else is using port 1700, the pod will
+   fail to start. Check `sudo ss -ulnp | grep 1700` before deploying.
 
 ---
 
@@ -275,8 +292,15 @@ natively supported by `netsh portproxy` (TCP only).
 
 **Workaround options:**
 
-1. **Run the gateway bridge outside k3s** as a standalone Docker container
-   with host networking:
+1. **Use `socat` on the Windows side** (via Cygwin or MSYS2) to bridge UDP
+   from the Windows LAN interface to the WSL2 NAT address:
+   ```bash
+   # Find WSL2 IP: wsl hostname -I (e.g., 172.24.160.1)
+   socat UDP-LISTEN:1700,bind=0.0.0.0,fork,reuseaddr UDP:172.24.160.1:1700
+   ```
+
+2. **Run the gateway bridge entirely outside k3s** as a standalone Docker
+   container with host networking:
    ```bash
    docker run -d --name gateway-bridge \
      --network host \
@@ -285,11 +309,7 @@ natively supported by `netsh portproxy` (TCP only).
      -e INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD="chirpstack_mqtt_dev" \
      chirpstack/chirpstack-gateway-bridge:4
    ```
-   This binds UDP 1700 directly. You'll need Mosquitto port-forwarded to
-   localhost:1883 for this to reach the k3s MQTT broker.
-
-2. **Use `socat` on Windows** (via Cygwin or MSYS2) to bridge UDP from
-   the Windows interface to the WSL2 NAT address.
+   You'll need Mosquitto port-forwarded to localhost:1883 for this to work.
 
 3. **Upgrade to Windows 11** to get mirrored networking support.
 
