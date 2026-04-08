@@ -1,0 +1,132 @@
+# =============================================================================
+# Eclipse Mosquitto — MQTT Broker
+# Bridges ChirpStack events to the integration service.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: coldchain
+data:
+  mosquitto.conf: |
+    # Listener
+    listener 1883
+    protocol mqtt
+
+    # Authentication
+    allow_anonymous false
+    password_file /mosquitto/config/password_file
+
+    # Persistence (retained messages survive broker restart)
+    persistence true
+    persistence_location /mosquitto/data/
+
+    # Logging
+    log_dest stdout
+    log_type all
+    connection_messages true
+
+    # Performance
+    max_queued_messages 10000
+    max_inflight_messages 100
+
+  # Password file — generated with: mosquitto_passwd -b password_file user pass
+  # For dev, we create this via an init container.
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+  namespace: coldchain
+  labels:
+    app: mosquitto
+    app.kubernetes.io/part-of: coldchain
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+    spec:
+      initContainers:
+        # Generate the password file from secrets
+        - name: init-passwords
+          image: eclipse-mosquitto:2
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              touch /mosquitto/config/password_file
+              mosquitto_passwd -b /mosquitto/config/password_file "$MQTT_USER" "$MQTT_PASSWORD"
+              # Add a separate user for ChirpStack
+              mosquitto_passwd -b /mosquitto/config/password_file chirpstack chirpstack_mqtt_dev
+              echo "Password file created."
+          env:
+            - name: MQTT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-credentials
+                  key: MQTT_USER
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-credentials
+                  key: MQTT_PASSWORD
+          volumeMounts:
+            - name: mosquitto-config-vol
+              mountPath: /mosquitto/config
+      containers:
+        - name: mosquitto
+          image: eclipse-mosquitto:2
+          ports:
+            - containerPort: 1883
+              name: mqtt
+          volumeMounts:
+            - name: mosquitto-config-vol
+              mountPath: /mosquitto/config
+            - name: mosquitto-data
+              mountPath: /mosquitto/data
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 3
+            periodSeconds: 5
+      volumes:
+        - name: mosquitto-config-vol
+          configMap:
+            name: mosquitto-config
+        - name: mosquitto-data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: coldchain
+  labels:
+    app: mosquitto
+    app.kubernetes.io/part-of: coldchain
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1883
+      targetPort: 1883
+      name: mqtt
+  selector:
+    app: mosquitto

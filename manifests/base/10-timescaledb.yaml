@@ -1,0 +1,132 @@
+# =============================================================================
+# TimescaleDB — PostgreSQL with time-series extensions
+# Uses a StatefulSet for stable network identity and persistent storage.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb
+  namespace: coldchain
+  labels:
+    app: timescaledb
+    app.kubernetes.io/part-of: coldchain
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: timescaledb
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb
+  namespace: coldchain
+  labels:
+    app: timescaledb
+    app.kubernetes.io/part-of: coldchain
+spec:
+  serviceName: timescaledb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+    spec:
+      containers:
+        - name: timescaledb
+          image: timescale/timescaledb:latest-pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: timescaledb-credentials
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: timescaledb-credentials
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: timescaledb-credentials
+                  key: POSTGRES_DB
+          volumeMounts:
+            - name: timescaledb-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            # Init script to create the ChirpStack database
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - coldchain
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - coldchain
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: timescaledb-init
+  volumeClaimTemplates:
+    - metadata:
+        name: timescaledb-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+# Init script: creates the ChirpStack database and enables extensions
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: timescaledb-init
+  namespace: coldchain
+data:
+  01-init-databases.sh: |
+    #!/bin/bash
+    set -e
+
+    # Create ChirpStack database (app database is created by POSTGRES_DB env var)
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+      -- Enable TimescaleDB extension on the main database
+      CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+      -- Create ChirpStack database and user
+      CREATE USER chirpstack WITH PASSWORD 'chirpstack_dev_password';
+      CREATE DATABASE chirpstack OWNER chirpstack;
+
+      -- ChirpStack needs pg_trgm extension
+      \c chirpstack
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    EOSQL
+
+    echo "Database initialization complete."

@@ -1,0 +1,84 @@
+# =============================================================================
+# Docker Compose — Alternative to k3s for simpler local development.
+# Same containers, same configuration, just docker-compose networking.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose exec timescaledb psql -U coldchain -d coldchain -f /docker-entrypoint-initdb.d/init-db.sql
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # TimescaleDB (PostgreSQL with time-series extensions)
+  # ---------------------------------------------------------------------------
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: coldchain-timescaledb
+    environment:
+      POSTGRES_USER: coldchain
+      POSTGRES_PASSWORD: coldchain_dev_password
+      POSTGRES_DB: coldchain
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/20-app-schema.sql:ro
+      - ./scripts/docker-init-chirpstack-db.sh:/docker-entrypoint-initdb.d/10-chirpstack-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coldchain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Eclipse Mosquitto (MQTT Broker)
+  # ---------------------------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: coldchain-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./config/mosquitto/password_file:/mosquitto/config/password_file:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/broker/uptime' -C 1 -W 3 -u coldchain -P coldchain_dev || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Redis (ChirpStack deduplication cache)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: coldchain-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # MailHog (Local email capture for testing alerts)
+  # ---------------------------------------------------------------------------
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: coldchain-mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    restart: unless-stopped
+
+volumes:
+  timescaledb_data:
+    driver: local
+  mosquitto_data:
+    driver: local
