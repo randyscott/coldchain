@@ -15,7 +15,7 @@ data:
 
     # Authentication
     allow_anonymous false
-    password_file /mosquitto/config/password_file
+    password_file /mosquitto/auth/password_file
 
     # Persistence (retained messages survive broker restart)
     persistence true
@@ -59,10 +59,10 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              touch /mosquitto/config/password_file
-              mosquitto_passwd -b /mosquitto/config/password_file "$MQTT_USER" "$MQTT_PASSWORD"
+              touch /mosquitto/auth/password_file
+              mosquitto_passwd -b /mosquitto/auth/password_file "$MQTT_USER" "$MQTT_PASSWORD"
               # Add a separate user for ChirpStack
-              mosquitto_passwd -b /mosquitto/config/password_file chirpstack chirpstack_mqtt_dev
+              mosquitto_passwd -b /mosquitto/auth/password_file chirpstack chirpstack_mqtt_dev
               echo "Password file created."
           env:
             - name: MQTT_USER
@@ -76,8 +76,8 @@ spec:
                   name: mosquitto-credentials
                   key: MQTT_PASSWORD
           volumeMounts:
-            - name: mosquitto-config-vol
-              mountPath: /mosquitto/config
+            - name: mosquitto-auth
+              mountPath: /mosquitto/auth
       containers:
         - name: mosquitto
           image: eclipse-mosquitto:2
@@ -87,6 +87,8 @@ spec:
           volumeMounts:
             - name: mosquitto-config-vol
               mountPath: /mosquitto/config
+            - name: mosquitto-auth
+              mountPath: /mosquitto/auth
             - name: mosquitto-data
               mountPath: /mosquitto/data
           resources:
@@ -110,6 +112,8 @@ spec:
         - name: mosquitto-config-vol
           configMap:
             name: mosquitto-config
+        - name: mosquitto-auth
+          emptyDir: {}
         - name: mosquitto-data
           emptyDir: {}
 
