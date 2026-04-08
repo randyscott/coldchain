@@ -1,0 +1,212 @@
+# =============================================================================
+# ChirpStack v4 — LoRaWAN Network Server
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chirpstack-config
+  namespace: coldchain
+data:
+  chirpstack.toml: |
+    [logging]
+      level="info"
+
+    [postgresql]
+      dsn="postgres://chirpstack:chirpstack_dev_password@timescaledb:5432/chirpstack?sslmode=disable"
+      max_open_connections=10
+      min_idle_connections=5
+
+    [redis]
+      servers=["redis://redis:6379"]
+
+    [network]
+      net_id="000000"
+      enabled_regions=["us915_0"]
+
+    [monitoring]
+      bind="0.0.0.0:8070"
+
+    [api]
+      bind="0.0.0.0:8080"
+      secret="coldchain-dev-api-secret-change-in-production"
+
+    [gateway]
+      allow_unknown_gateways=true
+
+    [integration]
+      enabled=["mqtt"]
+      [integration.mqtt]
+        server="tcp://coldchain:coldchain_dev@mosquitto:1883"
+        json=true
+        event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
+        command_topic="application/{{application_id}}/device/{{dev_eui}}/command/{{command}}"
+
+  region_us915.toml: |
+    [[regions]]
+      name="us915_0"
+      common_name="US915"
+
+      [regions.gateway]
+        force_gws_private=false
+        [regions.gateway.backend]
+          enabled="mqtt"
+          [regions.gateway.backend.mqtt]
+            event_topic="us915_0/gateway/+/event/+"
+            command_topic="us915_0/gateway/{{ gateway_id }}/command/{{ command }}"
+            server="tcp://mosquitto:1883"
+            username="chirpstack"
+            password="chirpstack_mqtt_dev"
+
+      [regions.network]
+        installation_margin=10
+        rx1_delay=1
+        rx1_dr_offset=0
+        rx2_dr=8
+        rx2_frequency=923300000
+        adr_disabled=false
+        min_dr=0
+        max_dr=5
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chirpstack
+  namespace: coldchain
+  labels:
+    app: chirpstack
+    app.kubernetes.io/part-of: coldchain
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chirpstack
+  template:
+    metadata:
+      labels:
+        app: chirpstack
+    spec:
+      containers:
+        - name: chirpstack
+          image: chirpstack/chirpstack:4
+          args: ["-c", "/etc/chirpstack"]
+          ports:
+            - containerPort: 8080
+              name: api
+            - containerPort: 8070
+              name: monitoring
+          volumeMounts:
+            - name: config
+              mountPath: /etc/chirpstack
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8070
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8070
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: config
+          configMap:
+            name: chirpstack-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chirpstack
+  namespace: coldchain
+  labels:
+    app: chirpstack
+    app.kubernetes.io/part-of: coldchain
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: api
+    - port: 8070
+      targetPort: 8070
+      name: monitoring
+  selector:
+    app: chirpstack
+
+---
+# =============================================================================
+# ChirpStack Gateway Bridge
+# Receives UDP from physical gateways and publishes to MQTT.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chirpstack-gateway-bridge
+  namespace: coldchain
+  labels:
+    app: chirpstack-gateway-bridge
+    app.kubernetes.io/part-of: coldchain
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chirpstack-gateway-bridge
+  template:
+    metadata:
+      labels:
+        app: chirpstack-gateway-bridge
+    spec:
+      containers:
+        - name: gateway-bridge
+          image: chirpstack/chirpstack-gateway-bridge:4
+          ports:
+            - containerPort: 1700
+              protocol: UDP
+              name: udp
+          env:
+            - name: INTEGRATION__MQTT__AUTH__GENERIC__SERVER
+              value: "tcp://mosquitto:1883"
+            - name: INTEGRATION__MQTT__AUTH__GENERIC__USERNAME
+              value: "chirpstack"
+            - name: INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD
+              value: "chirpstack_mqtt_dev"
+            - name: BACKEND__TYPE
+              value: "semtech_udp"
+            - name: BACKEND__SEMTECH_UDP__UDP_BIND
+              value: "0.0.0.0:1700"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chirpstack-gateway-bridge
+  namespace: coldchain
+  labels:
+    app: chirpstack-gateway-bridge
+    app.kubernetes.io/part-of: coldchain
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1700
+      targetPort: 1700
+      protocol: UDP
+      name: udp
+  selector:
+    app: chirpstack-gateway-bridge

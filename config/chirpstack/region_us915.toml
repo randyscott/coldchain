@@ -1,0 +1,37 @@
+# =============================================================================
+# ChirpStack Region Configuration — US915
+# =============================================================================
+
+[[regions]]
+  name="us915_0"
+  common_name="US915"
+
+  [regions.gateway]
+    force_gws_private=false
+
+    [regions.gateway.channels]
+      # US915 sub-band 2 (channels 8-15 + 65)
+      # This is the most commonly used sub-band in North America
+
+    [regions.gateway.backend]
+      enabled="mqtt"
+
+      [regions.gateway.backend.mqtt]
+        event_topic="us915_0/gateway/+/event/+"
+        command_topic="us915_0/gateway/{{ gateway_id }}/command/{{ command }}"
+        server="tcp://mosquitto:1883"
+        username="chirpstack"
+        password="chirpstack_mqtt_dev"
+
+  [regions.network]
+    installation_margin=10
+    rx1_delay=1
+    rx1_dr_offset=0
+    rx2_dr=8
+    rx2_frequency=923300000
+    rx2_prefer_on_rx1_dr_lt=0
+    rx2_prefer_on_link_budget=false
+    downlink_tx_power=-1
+    adr_disabled=false
+    min_dr=0
+    max_dr=5

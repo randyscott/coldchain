@@ -1,0 +1,25 @@
+# =============================================================================
+# ChirpStack Gateway Bridge Configuration
+# Receives UDP from LoRaWAN gateways (Semtech Packet Forwarder)
+# and forwards to ChirpStack via MQTT.
+# =============================================================================
+
+[general]
+  log_level=4  # info
+
+[backend]
+  type="semtech_udp"
+
+  [backend.semtech_udp]
+    udp_bind="0.0.0.0:1700"
+
+[integration]
+  marshaler="protobuf"
+
+  [integration.mqtt]
+    [integration.mqtt.auth]
+      type="generic"
+      [integration.mqtt.auth.generic]
+        server="tcp://mosquitto:1883"
+        username="chirpstack"
+        password="chirpstack_mqtt_dev"

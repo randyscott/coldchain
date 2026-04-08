@@ -1,0 +1,48 @@
+# =============================================================================
+# Sensor Data Simulator
+# Publishes fake ChirpStack uplink events to MQTT for development.
+# Disable this in production.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sensor-simulator
+  namespace: coldchain
+  labels:
+    app: sensor-simulator
+    app.kubernetes.io/part-of: coldchain
+    environment: development
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sensor-simulator
+  template:
+    metadata:
+      labels:
+        app: sensor-simulator
+    spec:
+      containers:
+        - name: simulator
+          image: coldchain/simulator:dev
+          # For local dev, build with:
+          #   docker build -t coldchain/simulator:dev services/simulator/
+          #   k3s ctr images import <(docker save coldchain/simulator:dev)
+          args:
+            - "--mqtt-host"
+            - "mosquitto"
+            - "--mqtt-port"
+            - "1883"
+            - "--mqtt-user"
+            - "coldchain"
+            - "--mqtt-pass"
+            - "coldchain_dev"
+            - "--interval"
+            - "30"
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

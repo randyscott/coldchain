@@ -53,20 +53,22 @@ bash scripts/apply-schema.sh
 ```
 coldchain/
 ├── config/                  # Service configuration files
+│   ├── chirpstack/          # ChirpStack + Gateway Bridge config
 │   └── mosquitto/           # Mosquitto MQTT broker config
-├── docker-compose.yaml      # Alternative local dev (no k3s needed)
+├── docker-compose.yaml      # Full local dev stack (recommended start)
 ├── docs/                    # Setup guides and documentation
-│   └── 01-local-setup.md   # k3s + WSL2 setup guide
+│   ├── 01-local-setup.md   # k3s + WSL2 setup guide
+│   └── 02-chirpstack-simulator.md  # ChirpStack & simulator guide
 ├── manifests/               # Kubernetes manifests
-│   ├── base/                # TimescaleDB, Mosquitto, Redis
-│   ├── chirpstack/          # ChirpStack network server (TODO)
+│   ├── base/                # TimescaleDB, Mosquitto, Redis, Simulator
+│   ├── chirpstack/          # ChirpStack network server
 │   └── keycloak/            # Keycloak auth server (TODO)
 ├── scripts/                 # Utility scripts
 │   ├── init-db.sql          # Application database schema
-│   └── apply-schema.sh      # Schema deployment helper
-└── services/                # Custom application code (TODO)
-    ├── integration/         # FastAPI integration service
-    ├── frontend/            # React frontend
+│   └── apply-schema.sh      # Schema deployment helper (k3s)
+└── services/                # Custom application code
+    ├── integration/         # FastAPI integration service (TODO)
+    ├── frontend/            # React frontend (TODO)
     └── simulator/           # Sensor data simulator
 ```
 
@@ -74,8 +76,8 @@ coldchain/
 
 - [x] Base infrastructure (TimescaleDB, Mosquitto, Redis)
 - [x] Database schema with TimescaleDB hypertables
-- [ ] ChirpStack deployment
-- [ ] Sensor data simulator
+- [x] ChirpStack deployment (network server + gateway bridge)
+- [x] Sensor data simulator (4 sensors with realistic patterns)
 - [ ] Integration service (FastAPI)
 - [ ] Keycloak setup
 - [ ] React frontend

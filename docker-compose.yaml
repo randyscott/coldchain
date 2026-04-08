@@ -67,6 +67,68 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # ChirpStack v4 (LoRaWAN Network Server)
+  # ---------------------------------------------------------------------------
+  chirpstack:
+    image: chirpstack/chirpstack:4
+    container_name: coldchain-chirpstack
+    command: -c /etc/chirpstack
+    ports:
+      - "8080:8080"   # Web UI + API
+    volumes:
+      - ./config/chirpstack:/etc/chirpstack:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # ChirpStack Gateway Bridge (UDP -> MQTT translator)
+  # ---------------------------------------------------------------------------
+  chirpstack-gateway-bridge:
+    image: chirpstack/chirpstack-gateway-bridge:4
+    container_name: coldchain-gateway-bridge
+    ports:
+      - "1700:1700/udp"  # Semtech Packet Forwarder UDP
+    environment:
+      INTEGRATION__MQTT__AUTH__GENERIC__SERVER: "tcp://mosquitto:1883"
+      INTEGRATION__MQTT__AUTH__GENERIC__USERNAME: "chirpstack"
+      INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD: "chirpstack_mqtt_dev"
+      BACKEND__TYPE: "semtech_udp"
+      BACKEND__SEMTECH_UDP__UDP_BIND: "0.0.0.0:1700"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Sensor Simulator (development only)
+  # ---------------------------------------------------------------------------
+  simulator:
+    build:
+      context: ./services/simulator
+    container_name: coldchain-simulator
+    command:
+      - "--mqtt-host"
+      - "mosquitto"
+      - "--mqtt-port"
+      - "1883"
+      - "--mqtt-user"
+      - "coldchain"
+      - "--mqtt-pass"
+      - "coldchain_dev"
+      - "--interval"
+      - "30"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # MailHog (Local email capture for testing alerts)
   # ---------------------------------------------------------------------------
   mailhog:
