@@ -24,8 +24,15 @@ export function SystemDetailPage() {
     refetchInterval: 15_000,
   });
 
+  const { data: activeAlertEvents } = useQuery({
+    queryKey: ['alertEvents', systemId, 'active'],
+    queryFn: () => api.getAlertEvents({ system_id: systemId, active_only: true }),
+    enabled: !!systemId,
+    refetchInterval: 15_000,
+  });
+
   const { data: alertEvents } = useQuery({
-    queryKey: ['alertEvents', systemId],
+    queryKey: ['alertEvents', systemId, 'history'],
     queryFn: () => api.getAlertEvents({ system_id: systemId, limit: 20 }),
     enabled: !!systemId,
     refetchInterval: 15_000,
@@ -58,13 +65,33 @@ export function SystemDetailPage() {
 
   const sensors = devices?.filter((d) => d.device_type === 'sensor') ?? [];
   const gateways = devices?.filter((d) => d.device_type === 'gateway') ?? [];
-  const activeAlerts = alertEvents?.filter((e) => !e.resolved_at) ?? [];
+  const activeAlerts = activeAlertEvents ?? [];
   const isTransport = system.system_type === 'transport';
 
-  // Find the highest threshold for chart reference lines
-  const highThreshold = alertRules
-    ?.filter((r) => r.operator === 'gt' || r.operator === 'gte')
-    .reduce((max, r) => Math.max(max, r.threshold_value), -Infinity);
+  // Build per-sensor threshold lookups.
+  // A rule applies to a sensor if device-specific (device_id matches) or system-wide (device_id null).
+  // Device-specific rules take precedence over system-wide ones.
+  function getThresholdsForSensor(sensorId: string): { high?: number; low?: number } {
+    if (!alertRules) return {};
+
+    function resolve(operators: string[], pick: (vals: number[]) => number): number | undefined {
+      const applicable = alertRules!.filter(
+        (r) =>
+          operators.includes(r.operator) &&
+          r.metric === 'temperature' &&
+          (r.device_id === sensorId || r.device_id === null)
+      );
+      if (applicable.length === 0) return undefined;
+      const specific = applicable.filter((r) => r.device_id === sensorId);
+      const pool = specific.length > 0 ? specific : applicable;
+      return pick(pool.map((r) => r.threshold_value));
+    }
+
+    return {
+      high: resolve(['gt', 'gte'], (vals) => Math.max(...vals)),
+      low:  resolve(['lt', 'lte'], (vals) => Math.min(...vals)),
+    };
+  }
 
   return (
     <div>
@@ -158,7 +185,8 @@ export function SystemDetailPage() {
               <SensorRow
                 key={sensor.id}
                 device={sensor}
-                thresholdHigh={highThreshold && highThreshold > -Infinity ? highThreshold : undefined}
+                thresholdHigh={getThresholdsForSensor(sensor.id).high}
+                thresholdLow={getThresholdsForSensor(sensor.id).low}
               />
             ))}
           </div>

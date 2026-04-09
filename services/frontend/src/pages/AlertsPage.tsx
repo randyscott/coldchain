@@ -1,35 +1,68 @@
 import { useQuery } from '@tanstack/react-query';
+import { NavLink, Outlet, useMatch } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { clsx } from 'clsx';
 import { api } from '../api/client';
 import { formatTemp, formatTimestamp, formatTimeAgo } from '../utils/format';
 
 export function AlertsPage() {
+  const isRules = !!useMatch('/alerts/rules');
+
   const { data: events, isLoading } = useQuery({
     queryKey: ['allAlertEvents'],
     queryFn: () => api.getAlertEvents({ limit: 50 }),
     refetchInterval: 15_000,
+    enabled: !isRules,
   });
 
   const activeCount = events?.filter((e) => !e.resolved_at).length ?? 0;
 
   return (
     <div>
-      <div className="mb-8">
+      {/* Header */}
+      <div className="mb-6">
         <h2 className="text-2xl font-semibold text-white">Alerts</h2>
-        <p className="text-cold-300/70 mt-1 text-sm">
-          {activeCount > 0 ? (
-            <span className="text-alert-critical font-medium">{activeCount} active alert{activeCount !== 1 ? 's' : ''}</span>
-          ) : (
-            'All systems operating normally'
-          )}
-        </p>
+        {!isRules && (
+          <p className="text-cold-300/70 mt-1 text-sm">
+            {activeCount > 0 ? (
+              <span className="text-alert-critical font-medium">{activeCount} active alert{activeCount !== 1 ? 's' : ''}</span>
+            ) : (
+              'All systems operating normally'
+            )}
+          </p>
+        )}
       </div>
 
-      {isLoading ? (
+      {/* Tab bar */}
+      <div className="flex gap-1 mb-6 border-b border-cold-700/30">
+        {[
+          { to: '/alerts',       label: 'Events', end: true },
+          { to: '/alerts/rules', label: 'Rules',  end: false },
+        ].map(tab => (
+          <NavLink
+            key={tab.to}
+            to={tab.to}
+            end={tab.end}
+            className={({ isActive }) => clsx(
+              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              isActive
+                ? 'border-cold-400 text-white'
+                : 'border-transparent text-cold-400 hover:text-cold-200'
+            )}
+          >
+            {tab.label}
+          </NavLink>
+        ))}
+      </div>
+
+      {/* Routed sub-page (Rules tab renders via <Outlet />) */}
+      {isRules ? <Outlet /> : null}
+
+      {!isRules && isLoading ? (
         <div className="flex items-center justify-center h-64 text-cold-400">
           Loading alerts...
         </div>
-      ) : events && events.length > 0 ? (
+      ) : !isRules && events && events.length > 0 ? (
         <div className="space-y-2">
           {events.map((event) => (
             <div
@@ -81,7 +114,7 @@ export function AlertsPage() {
             </div>
           ))}
         </div>
-      ) : (
+      ) : !isRules ? (
         <div className="card p-12 text-center">
           <AlertTriangle className="w-12 h-12 text-cold-600 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-cold-200 mb-2">No alerts yet</h3>
@@ -89,7 +122,7 @@ export function AlertsPage() {
             Alert events will appear here when sensor readings breach configured thresholds.
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -129,15 +129,40 @@ export interface AlertRule {
   device_id: string | null;
   name: string;
   description: string | null;
-  rule_type: string;
-  metric: string;
-  operator: string;
+  rule_type: 'threshold' | 'duration' | 'rate_of_change' | 'connectivity' | 'battery';
+  metric: 'temperature' | 'humidity' | 'battery_voltage';
+  operator: 'gt' | 'gte' | 'lt' | 'lte';
   threshold_value: number;
   duration_seconds: number;
   notify_channels: string[];
   escalation_minutes: number | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface AlertRuleCreate {
+  system_id: string;
+  device_id?: string | null;
+  name: string;
+  description?: string | null;
+  rule_type: AlertRule['rule_type'];
+  metric: AlertRule['metric'];
+  operator: AlertRule['operator'];
+  threshold_value: number;
+  duration_seconds?: number;
+  silence_seconds?: number | null;
+  notify_channels?: string[];
+  escalation_minutes?: number | null;
+}
+
+export interface AlertRuleUpdate {
+  name?: string;
+  description?: string | null;
+  threshold_value?: number;
+  duration_seconds?: number;
+  notify_channels?: string[];
+  escalation_minutes?: number | null;
+  is_active?: boolean;
 }
 
 // --- API Functions ---
@@ -181,6 +206,18 @@ export const api = {
     const qs = systemId ? `?system_id=${systemId}` : '';
     return request<AlertRule[]>(`/alerts/rules${qs}`);
   },
+  createAlertRule: (data: AlertRuleCreate) =>
+    request<AlertRule>('/alerts/rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAlertRule: (id: string, data: AlertRuleUpdate) =>
+    request<AlertRule>(`/alerts/rules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteAlertRule: (id: string) =>
+    request<void>(`/alerts/rules/${id}`, { method: 'DELETE' }),
   getAlertEvents: (params?: { system_id?: string; active_only?: boolean; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.system_id) qs.set('system_id', params.system_id);

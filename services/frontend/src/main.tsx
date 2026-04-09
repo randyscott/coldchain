@@ -8,6 +8,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { SystemDetailPage } from './pages/SystemDetailPage';
 import { AlertsPage } from './pages/AlertsPage';
+import { AlertRulesPage } from './pages/AlertRulesPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -30,7 +31,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route element={<AuthGate><AppLayout /></AuthGate>}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/system/:systemId" element={<SystemDetailPage />} />
-              <Route path="/alerts" element={<AlertsPage />} />
+              <Route path="/alerts" element={<AlertsPage />}>
+                <Route path="rules" element={<AlertRulesPage />} />
+              </Route>
             </Route>
           </Routes>
         </BrowserRouter>

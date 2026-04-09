@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Wifi, WifiOff, Battery, Radio } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import type { Device } from '../../api/client';
 import { api } from '../../api/client';
 import { formatTemp, formatHumidity, formatBattery, formatTimeAgo } from '../../utils/format';
@@ -9,9 +10,10 @@ import { TemperatureChart } from './TemperatureChart';
 interface Props {
   device: Device;
   thresholdHigh?: number;
+  thresholdLow?: number;
 }
 
-export function SensorRow({ device, thresholdHigh }: Props) {
+export function SensorRow({ device, thresholdHigh, thresholdLow }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   const isOnline = device.last_seen_at
@@ -19,7 +21,7 @@ export function SensorRow({ device, thresholdHigh }: Props) {
     : false;
 
   // Fetch readings when expanded
-  const { data: readings } = useQuery({
+  const { data: readings, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['readings', device.id],
     queryFn: () => api.getDeviceReadings(device.id, { limit: 500 }),
     enabled: expanded,
@@ -34,11 +36,20 @@ export function SensorRow({ device, thresholdHigh }: Props) {
         className="w-full px-5 py-4 flex items-center gap-4 hover:bg-cold-800/30 transition-colors text-left"
       >
         {/* Online indicator */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 flex items-center gap-1.5">
           {isOnline ? (
-            <Wifi className="w-4 h-4 text-alert-ok" />
+            <>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-alert-ok opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-alert-ok" />
+              </span>
+              <Wifi className="w-4 h-4 text-alert-ok" />
+            </>
           ) : (
-            <WifiOff className="w-4 h-4 text-cold-500" />
+            <>
+              <span className="inline-flex rounded-full h-2 w-2 bg-cold-600" />
+              <WifiOff className="w-4 h-4 text-cold-500" />
+            </>
           )}
         </div>
 
@@ -104,12 +115,15 @@ export function SensorRow({ device, thresholdHigh }: Props) {
       {expanded && (
         <div className="px-5 pb-5 border-t border-cold-700/20">
           <div className="flex items-center justify-between mt-4 mb-2">
-            <h4 className="text-sm font-medium text-cold-200">
-              Temperature — Last 24 Hours
-            </h4>
-            {readings && (
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-medium text-cold-200">Temperature History</h4>
+              {isFetching && (
+                <span className="w-1.5 h-1.5 rounded-full bg-cold-400 animate-pulse" />
+              )}
+            </div>
+            {dataUpdatedAt > 0 && (
               <span className="text-xs text-cold-400">
-                {readings.length} readings
+                Updated {format(dataUpdatedAt, 'HH:mm:ss')}
               </span>
             )}
           </div>
@@ -117,6 +131,7 @@ export function SensorRow({ device, thresholdHigh }: Props) {
             <TemperatureChart
               readings={readings}
               thresholdHigh={thresholdHigh}
+              thresholdLow={thresholdLow}
               height={250}
             />
           ) : (

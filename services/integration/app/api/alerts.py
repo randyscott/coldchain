@@ -2,10 +2,13 @@
 Alerts API — Manage alert rules and view alert events.
 """
 
-from datetime import datetime, timedelta, timezone
+import asyncio
+import json
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +20,80 @@ from app.models.schemas import (
 )
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+
+# =========================================================================
+# SSE — Server-Sent Events for live alert notifications
+# =========================================================================
+
+# Set of active SSE subscriber queues, keyed by group_id for tenant isolation
+_subscribers: dict[str, set[asyncio.Queue]] = {}
+
+
+def publish_alert_event(group_id: str, event: dict):
+    """Push an alert event to all SSE subscribers for the given group."""
+    queues = _subscribers.get(str(group_id), set())
+    for q in queues:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+
+async def _get_sse_user(
+    token: str | None = Query(None),
+) -> CurrentUser:
+    """
+    Auth dependency for SSE — EventSource can't send custom headers,
+    so the token is accepted as a query parameter as a fallback.
+    """
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    return await get_current_user(creds)
+
+
+@router.get("/stream")
+async def alert_stream(
+    request: Request,
+    user: CurrentUser = Depends(_get_sse_user),
+):
+    """SSE endpoint — streams alert events to the browser in real time."""
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+    group_id = str(user.group_id)
+
+    if group_id not in _subscribers:
+        _subscribers[group_id] = set()
+    _subscribers[group_id].add(queue)
+
+    async def generator():
+        try:
+            # Send an initial keep-alive comment so the browser knows the stream is open
+            yield ": connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    # Send keep-alive every 30s to prevent proxy timeouts
+                    yield ": keepalive\n\n"
+        finally:
+            _subscribers.get(group_id, set()).discard(queue)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable Nginx buffering
+        },
+    )
 
 
 # =========================================================================
@@ -65,7 +142,7 @@ async def create_alert_rule(
         raise HTTPException(status_code=404, detail="System not found")
 
     data = body.model_dump()
-    data["notify_channels"] = str(data["notify_channels"])  # JSONB
+    data["notify_channels"] = json.dumps(data["notify_channels"])
 
     result = await db.execute(
         text("""
@@ -76,7 +153,7 @@ async def create_alert_rule(
             VALUES
                 (:system_id, :device_id, :name, :description, :rule_type, :metric,
                  :operator, :threshold_value, :duration_seconds, :rate_period_seconds,
-                 :silence_seconds, :notify_channels::jsonb, :escalation_minutes)
+                 :silence_seconds, CAST(:notify_channels AS jsonb), :escalation_minutes)
             RETURNING *
         """),
         data,
@@ -98,10 +175,10 @@ async def update_alert_rule(
         raise HTTPException(status_code=400, detail="No fields to update")
 
     if "notify_channels" in updates:
-        updates["notify_channels"] = str(updates["notify_channels"])
+        updates["notify_channels"] = json.dumps(updates["notify_channels"])
 
     set_clause = ", ".join(
-        f"{k} = :{k}::jsonb" if k == "notify_channels" else f"{k} = :{k}"
+        f"{k} = CAST(:{k} AS jsonb)" if k == "notify_channels" else f"{k} = :{k}"
         for k in updates
     )
     updates["rule_id"] = rule_id

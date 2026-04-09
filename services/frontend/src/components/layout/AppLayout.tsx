@@ -2,9 +2,13 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { Thermometer, LayoutDashboard, Bell, LogOut } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
+import { useAlertStream } from '../../hooks/useAlertStream';
+import { useActiveAlertCount } from '../../hooks/useActiveAlertCount';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+  useAlertStream();
+  const activeAlertCount = useActiveAlertCount();
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -43,6 +47,11 @@ export function AppLayout() {
               >
                 <Bell className="w-4 h-4" />
                 Alerts
+                {activeAlertCount > 0 && (
+                  <span className="ml-0.5 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full bg-alert-critical text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                    {activeAlertCount > 99 ? '99+' : activeAlertCount}
+                  </span>
+                )}
               </NavLink>
             </nav>
 

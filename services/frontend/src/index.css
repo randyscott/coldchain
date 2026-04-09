@@ -51,4 +51,34 @@
   .nav-link-active {
     @apply nav-link text-white bg-cold-700/50;
   }
+
+  .form-input {
+    @apply w-full bg-cold-800/60 border border-cold-600/40 rounded-lg px-3 py-2
+           text-sm text-white placeholder-cold-500
+           focus:outline-none focus:border-cold-400/60 focus:ring-1 focus:ring-cold-400/30
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .form-select {
+    @apply form-input appearance-none;
+  }
+
+  .form-error {
+    @apply text-xs text-alert-critical mt-1;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg bg-cold-500 hover:bg-cold-400 text-white text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg bg-cold-800 hover:bg-cold-700 text-cold-200 text-sm font-medium
+           border border-cold-600/40 transition-colors;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 rounded-lg bg-alert-critical/80 hover:bg-alert-critical text-white text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
 }

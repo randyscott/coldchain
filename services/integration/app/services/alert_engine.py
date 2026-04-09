@@ -102,7 +102,7 @@ async def evaluate_reading(reading: dict):
         if breached:
             await _handle_breach(pool, rule, reading, key, value)
         else:
-            await _handle_recovery(pool, rule, key)
+            await _handle_recovery(pool, rule, key, reading)
 
 
 async def _handle_breach(
@@ -161,21 +161,28 @@ async def _handle_breach(
         )
 
 
-async def _handle_recovery(pool: asyncpg.Pool, rule: dict, key: tuple):
+async def _handle_recovery(pool: asyncpg.Pool, rule: dict, key: tuple, reading: dict | None = None):
     """Handle when a reading returns to normal range."""
     if key in _active_breaches:
         del _active_breaches[key]
 
     if key in _triggered_alerts:
-        # Resolve the alert
+        from app.api.alerts import publish_alert_event
+
         alert_id = _triggered_alerts.pop(key)
         await pool.execute(
-            """
-            UPDATE alert_events SET resolved_at = NOW() WHERE id = $1
-            """,
+            "UPDATE alert_events SET resolved_at = NOW() WHERE id = $1",
             alert_id,
         )
         logger.info(f"✅ Alert resolved: {rule['name']} (event {alert_id})")
+
+        if reading:
+            publish_alert_event(str(reading.get("group_id", "")), {
+                "type": "resolved",
+                "alert_event_id": str(alert_id),
+                "rule_name": rule["name"],
+                "device_name": reading.get("device_name", ""),
+            })
 
 
 async def _evaluate_battery_rule(pool: asyncpg.Pool, rule: dict, reading: dict):
@@ -210,17 +217,30 @@ async def _create_alert_event(
     pool: asyncpg.Pool, rule: dict, reading: dict, trigger_value: float
 ) -> UUID:
     """Insert a new alert event and return its ID."""
+    from app.api.alerts import publish_alert_event
+
     row = await pool.fetchrow(
         """
         INSERT INTO alert_events
             (alert_rule_id, device_id, triggered_at, trigger_value, peak_value)
         VALUES ($1, $2, NOW(), $3, $3)
-        RETURNING id
+        RETURNING id, triggered_at
         """,
         rule["id"],
         reading["device_id"],
         trigger_value,
     )
+
+    # Push to SSE subscribers
+    publish_alert_event(str(reading.get("group_id", "")), {
+        "type": "triggered",
+        "alert_event_id": str(row["id"]),
+        "rule_name": rule["name"],
+        "device_name": reading.get("device_name", ""),
+        "trigger_value": trigger_value,
+        "triggered_at": row["triggered_at"].isoformat(),
+    })
+
     return row["id"]
 
 
@@ -238,6 +258,24 @@ async def connectivity_checker():
     # Wait for startup
     await asyncio.sleep(10)
 
+    # Seed _triggered_alerts from any open connectivity alerts already in the DB.
+    # This ensures recovery logic fires correctly after a service restart.
+    pool = await _get_pool()
+    open_rows = await pool.fetch(
+        """
+        SELECT ae.id, ae.alert_rule_id, ae.device_id
+        FROM alert_events ae
+        JOIN alert_rules ar ON ae.alert_rule_id = ar.id
+        WHERE ar.rule_type = 'connectivity'
+          AND ae.resolved_at IS NULL
+        """
+    )
+    for row in open_rows:
+        key = (row["alert_rule_id"], row["device_id"])
+        _triggered_alerts[key] = row["id"]
+    if open_rows:
+        logger.info(f"Seeded {len(open_rows)} open connectivity alert(s) from DB")
+
     while True:
         try:
             pool = await _get_pool()
@@ -251,35 +289,37 @@ async def connectivity_checker():
                 silence = rule.get("silence_seconds", 1800) or 1800
                 cutoff = datetime.now(timezone.utc) - timedelta(seconds=silence)
 
-                # Find devices in this system that haven't reported
+                # Find ALL active sensors for this rule (both online and offline)
                 if rule["device_id"]:
-                    # Device-specific rule
-                    rows = await pool.fetch(
+                    all_rows = await pool.fetch(
                         """
                         SELECT id, name, last_seen_at
                         FROM devices
                         WHERE id = $1 AND is_active = TRUE
-                          AND (last_seen_at IS NULL OR last_seen_at < $2)
                         """,
-                        rule["device_id"], cutoff,
+                        rule["device_id"],
                     )
                 else:
-                    # System-wide rule
-                    rows = await pool.fetch(
+                    all_rows = await pool.fetch(
                         """
                         SELECT id, name, last_seen_at
                         FROM devices
                         WHERE system_id = $1
                           AND device_type = 'sensor'
                           AND is_active = TRUE
-                          AND (last_seen_at IS NULL OR last_seen_at < $2)
                         """,
-                        rule["system_id"], cutoff,
+                        rule["system_id"],
                     )
 
-                for device in rows:
+                for device in all_rows:
                     key = (rule["id"], device["id"])
-                    if key not in _triggered_alerts:
+                    is_offline = (
+                        device["last_seen_at"] is None
+                        or device["last_seen_at"] < cutoff
+                    )
+
+                    if is_offline and key not in _triggered_alerts:
+                        # Device went offline — trigger alert
                         alert_id = await _create_alert_event(
                             pool, rule,
                             {
@@ -295,6 +335,21 @@ async def connectivity_checker():
                             f"📡 CONNECTIVITY ALERT: {device['name']} "
                             f"last seen {device['last_seen_at']}"
                         )
+                    elif not is_offline and key in _triggered_alerts:
+                        from app.api.alerts import publish_alert_event
+
+                        alert_id = _triggered_alerts.pop(key)
+                        await pool.execute(
+                            "UPDATE alert_events SET resolved_at = NOW() WHERE id = $1",
+                            alert_id,
+                        )
+                        logger.info(f"✅ Connectivity restored: {device['name']}")
+                        publish_alert_event(str(rule["group_id"]), {
+                            "type": "resolved",
+                            "alert_event_id": str(alert_id),
+                            "rule_name": rule["name"],
+                            "device_name": device["name"],
+                        })
 
         except Exception:
             logger.exception("Error in connectivity checker")

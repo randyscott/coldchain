@@ -24,6 +24,21 @@ export function TemperatureChart({ readings, thresholdHigh, thresholdLow, height
       }));
   }, [readings]);
 
+  const yDomain = useMemo((): [number, number] => {
+    const temps = data.map(d => d.temperature).filter((t): t is number => t != null);
+    const candidates = [...temps];
+    if (thresholdHigh != null) candidates.push(thresholdHigh);
+    if (thresholdLow != null) candidates.push(thresholdLow);
+    if (candidates.length === 0) return [0, 10];
+    const min = Math.min(...candidates);
+    const max = Math.max(...candidates);
+    const padding = Math.max((max - min) * 0.1, 1);
+    return [
+      Math.floor(min - padding),
+      Math.ceil(max + padding),
+    ];
+  }, [data, thresholdHigh, thresholdLow]);
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-cold-400 text-sm">
@@ -46,6 +61,7 @@ export function TemperatureChart({ readings, thresholdHigh, thresholdLow, height
           tickLine={false}
         />
         <YAxis
+          domain={yDomain}
           stroke="#4a7fb5"
           fontSize={11}
           tickLine={false}

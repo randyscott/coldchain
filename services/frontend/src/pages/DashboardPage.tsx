@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Thermometer, Wifi } from 'lucide-react';
+import { format } from 'date-fns';
 import { api } from '../api/client';
 import { SystemCard } from '../components/dashboard/SystemCard';
 
 export function DashboardPage() {
-  const { data: systems, isLoading, error } = useQuery({
+  const { data: systems, isLoading, error, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['systemSummary'],
     queryFn: api.getSystemSummary,
     refetchInterval: 15_000,
@@ -40,9 +41,16 @@ export function DashboardPage() {
       {/* Page header */}
       <div className="mb-8">
         <h2 className="text-2xl font-semibold text-white">Dashboard</h2>
-        <p className="text-cold-300/70 mt-1 text-sm">
-          Real-time overview of all monitored systems
-        </p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-cold-300/70 text-sm">Real-time overview of all monitored systems</p>
+          {dataUpdatedAt > 0 && (
+            <span className="text-xs text-cold-500 flex items-center gap-1">
+              ·
+              {isFetching && <span className="w-1.5 h-1.5 rounded-full bg-cold-400 animate-pulse inline-block" />}
+              {format(dataUpdatedAt, 'HH:mm:ss')}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Summary stats */}
