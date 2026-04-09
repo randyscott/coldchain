@@ -2,6 +2,7 @@
 Application configuration — loaded from environment variables.
 """
 
+from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -26,11 +27,13 @@ class Settings(BaseSettings):
     mqtt_topic_prefix: str = Field(default="application/+/device/+/event/up")
 
     # --- Auth (Keycloak) ---
-    keycloak_url: str = Field(default="http://localhost:8081")
+    keycloak_url: str = Field(default="http://localhost:8081/auth")
     keycloak_realm: str = Field(default="coldchain")
     keycloak_client_id: str = Field(default="coldchain-api")
-    # For dev, we can disable auth
-    auth_enabled: bool = Field(default=False)
+    # When the integration service runs inside Docker, keycloak_url points to the internal
+    # service (e.g. http://keycloak:8080/auth). Set keycloak_public_url to the external URL
+    # (e.g. http://localhost:8081/auth) so JWT issuer validation matches what the browser sees.
+    keycloak_public_url: Optional[str] = Field(default=None)
 
     # --- Alerting ---
     smtp_host: str = Field(default="localhost")

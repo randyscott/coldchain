@@ -1,11 +1,9 @@
 """
 Authentication & authorization — validates Keycloak JWTs.
-In development mode (auth_enabled=False), returns a mock user.
 """
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 from fastapi import Depends, HTTPException, status
@@ -16,10 +14,10 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 
 # Cache for Keycloak's public keys
-_jwks_cache: Optional[dict] = None
+_jwks_cache: dict | None = None
 
 
 @dataclass
@@ -30,16 +28,6 @@ class CurrentUser:
     group_id: str
     role: str  # admin, manager, viewer
     display_name: str
-
-
-# Dev-mode mock user (matches seed data in init-db.sql)
-_MOCK_USER = CurrentUser(
-    user_id="b0000000-0000-0000-0000-000000000001",
-    email="admin@demo.local",
-    group_id="a0000000-0000-0000-0000-000000000001",
-    role="admin",
-    display_name="Demo Admin",
-)
 
 
 async def _get_jwks() -> dict:
@@ -60,33 +48,21 @@ async def _get_jwks() -> dict:
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> CurrentUser:
-    """
-    FastAPI dependency that extracts and validates the current user.
-    In dev mode, returns a mock admin user if no token is provided.
-    """
-    # Dev mode bypass
-    if not settings.auth_enabled:
-        return _MOCK_USER
-
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-
+    """FastAPI dependency that extracts and validates the current user from a Keycloak JWT."""
     token = credentials.credentials
 
+    # Use public URL for issuer validation — the iss claim in the token reflects the URL
+    # the browser used to obtain it, which may differ from the internal Docker service URL.
+    issuer_base = settings.keycloak_public_url or settings.keycloak_url
+
     try:
-        # Fetch Keycloak public keys
         jwks = await _get_jwks()
 
-        # Decode the JWT header to find the key ID
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get("kid")
 
-        # Find the matching key
         rsa_key = None
         for key in jwks.get("keys", []):
             if key["kid"] == kid:
@@ -99,17 +75,15 @@ async def get_current_user(
                 detail="Unable to find appropriate key",
             )
 
-        # Verify and decode the token
         payload = jwt.decode(
             token,
             rsa_key,
             algorithms=["RS256"],
             audience=settings.keycloak_client_id,
-            issuer=f"{settings.keycloak_url}/realms/{settings.keycloak_realm}",
+            issuer=f"{issuer_base}/realms/{settings.keycloak_realm}",
         )
 
-        # Extract user info from token claims
-        # These claims must be configured in Keycloak's client mapper
+        # These claims are injected by the Keycloak protocol mappers configured in the realm.
         return CurrentUser(
             user_id=payload.get("sub", ""),
             email=payload.get("email", ""),

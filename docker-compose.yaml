@@ -145,7 +145,10 @@ services:
       COLDCHAIN_MQTT_PORT: "1883"
       COLDCHAIN_MQTT_USERNAME: "coldchain"
       COLDCHAIN_MQTT_PASSWORD: "coldchain_dev"
-      COLDCHAIN_AUTH_ENABLED: "false"
+      COLDCHAIN_KEYCLOAK_URL: "http://keycloak:8080/auth"
+      COLDCHAIN_KEYCLOAK_PUBLIC_URL: "http://localhost:8081/auth"
+      COLDCHAIN_KEYCLOAK_REALM: "coldchain"
+      COLDCHAIN_KEYCLOAK_CLIENT_ID: "coldchain-api"
       COLDCHAIN_ENVIRONMENT: "development"
       COLDCHAIN_LOG_LEVEL: "INFO"
       COLDCHAIN_SMTP_HOST: "mailhog"
@@ -155,6 +158,8 @@ services:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------

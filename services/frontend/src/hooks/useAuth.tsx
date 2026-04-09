@@ -32,23 +32,10 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
-// Config — set VITE_AUTH_ENABLED=true to enable Keycloak
-const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === 'true';
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8081/auth';
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'coldchain';
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'coldchain-web';
 
-// Dev-mode mock user
-const MOCK_USER: User = {
-  id: 'b0000000-0000-0000-0000-000000000001',
-  email: 'admin@demo.local',
-  name: 'Demo Admin',
-  group_id: 'a0000000-0000-0000-0000-000000000001',
-  role: 'admin',
-  token: '',
-};
-
-// OIDC helpers
 function getAuthUrl(): string {
   const params = new URLSearchParams({
     client_id: KEYCLOAK_CLIENT_ID,
@@ -86,19 +73,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Handle OIDC callback
   useEffect(() => {
-    if (!AUTH_ENABLED) {
-      setUser(MOCK_USER);
-      setIsLoading(false);
-      return;
-    }
-
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
 
     if (code && url.pathname === '/auth/callback') {
-      // Exchange authorization code for tokens
       exchangeCode(code)
         .then(({ access_token }) => {
           const claims = parseJwt(access_token);
@@ -110,10 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role: (claims.role || 'viewer') as string,
             token: access_token,
           });
-          // Store token for API calls
           sessionStorage.setItem('access_token', access_token);
-          // Clean up URL
-          window.history.replaceState({}, '', '/');
+          window.location.replace('/');
         })
         .catch((err) => {
           console.error('Auth callback failed:', err);
@@ -121,12 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .finally(() => setIsLoading(false));
     } else {
-      // Check for existing token
       const storedToken = sessionStorage.getItem('access_token');
       if (storedToken) {
         try {
           const claims = parseJwt(storedToken);
-          // Check if expired
           const exp = (claims.exp as number) * 1000;
           if (exp > Date.now()) {
             setUser({
@@ -149,22 +124,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(() => {
-    if (AUTH_ENABLED) {
-      window.location.href = getAuthUrl();
-    }
+    window.location.href = getAuthUrl();
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     sessionStorage.removeItem('access_token');
-    if (AUTH_ENABLED) {
-      const logoutUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout`;
-      const params = new URLSearchParams({
-        client_id: KEYCLOAK_CLIENT_ID,
-        post_logout_redirect_uri: window.location.origin,
-      });
-      window.location.href = `${logoutUrl}?${params}`;
-    }
+    const logoutUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout`;
+    const params = new URLSearchParams({
+      client_id: KEYCLOAK_CLIENT_ID,
+      post_logout_redirect_uri: window.location.origin,
+    });
+    window.location.href = `${logoutUrl}?${params}`;
   }, []);
 
   return (

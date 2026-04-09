@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     """Manage background tasks alongside the FastAPI server."""
     logger.info("🚀 Starting Cold Chain Integration Service")
     logger.info(f"   Environment: {settings.environment}")
-    logger.info(f"   Auth enabled: {settings.auth_enabled}")
+    logger.info(f"   Keycloak: {settings.keycloak_url}")
     logger.info(f"   MQTT broker: {settings.mqtt_host}:{settings.mqtt_port}")
 
     # Wire up the alert engine to receive readings from the MQTT ingestion

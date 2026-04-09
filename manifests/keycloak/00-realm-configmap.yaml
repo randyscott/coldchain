@@ -1,15 +1,4 @@
-# =============================================================================
-# Keycloak Realm Configuration — loaded as a ConfigMap
-# To regenerate from the JSON file:
-#   kubectl create configmap keycloak-realm \
-#     --from-file=coldchain-realm.json=config/keycloak/coldchain-realm.json \
-#     -n coldchain --dry-run=client -o yaml > manifests/keycloak/00-realm-configmap.yaml
-# =============================================================================
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: keycloak-realm
-  namespace: coldchain
 data:
   coldchain-realm.json: |
     {
@@ -20,25 +9,40 @@ data:
       "loginWithEmailAllowed": true,
       "duplicateEmailsAllowed": false,
       "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
       "sslRequired": "none",
       "accessTokenLifespan": 300,
       "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
       "roles": {
         "realm": [
-          { "name": "admin", "description": "Full access" },
-          { "name": "manager", "description": "Configure and acknowledge alerts" },
-          { "name": "viewer", "description": "Read-only access" }
+          {
+            "name": "admin",
+            "description": "Full access: manage users, devices, systems, alerts"
+          },
+          {
+            "name": "manager",
+            "description": "Configure alerts, acknowledge alerts, generate reports"
+          },
+          {
+            "name": "viewer",
+            "description": "Read-only dashboard access"
+          }
         ]
       },
       "groups": [
         {
           "name": "Demo Organization",
-          "attributes": { "group_id": ["a0000000-0000-0000-0000-000000000001"] }
+          "attributes": {
+            "group_id": ["a0000000-0000-0000-0000-000000000001"]
+          }
         }
       ],
       "clients": [
         {
           "clientId": "coldchain-api",
+          "name": "Cold Chain API",
+          "description": "Backend API service",
           "enabled": true,
           "publicClient": false,
           "bearerOnly": true,
@@ -47,14 +51,32 @@ data:
         },
         {
           "clientId": "coldchain-web",
+          "name": "Cold Chain Web Dashboard",
+          "description": "React frontend application",
           "enabled": true,
           "publicClient": true,
           "standardFlowEnabled": true,
           "directAccessGrantsEnabled": true,
           "rootUrl": "http://localhost:5173",
-          "redirectUris": ["http://localhost:5173/*", "http://localhost:3000/*"],
-          "webOrigins": ["http://localhost:5173", "http://localhost:3000"],
-          "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email", "coldchain-scope"],
+          "baseUrl": "/",
+          "redirectUris": [
+            "http://localhost:5173/*",
+            "http://localhost:3000/*",
+            "http://localhost:80/*"
+          ],
+          "webOrigins": [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost"
+          ],
+          "defaultClientScopes": [
+            "web-origins",
+            "acr",
+            "profile",
+            "roles",
+            "email",
+            "coldchain-scope"
+          ],
           "protocolMappers": [
             {
               "name": "group_id_mapper",
@@ -87,8 +109,185 @@ data:
       ],
       "clientScopes": [
         {
-          "name": "coldchain-scope",
+          "name": "profile",
+          "description": "OpenID Connect built-in scope: profile",
           "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "true",
+            "display.on.consent.screen": "true"
+          },
+          "protocolMappers": [
+            {
+              "name": "username",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "username",
+                "claim.name": "preferred_username",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "given name",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "firstName",
+                "claim.name": "given_name",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "family name",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "lastName",
+                "claim.name": "family_name",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "full name",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-full-name-mapper",
+              "config": {
+                "id.token.claim": "true",
+                "access.token.claim": "false",
+                "userinfo.token.claim": "true"
+              }
+            }
+          ]
+        },
+        {
+          "name": "email",
+          "description": "OpenID Connect built-in scope: email",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "true",
+            "display.on.consent.screen": "true"
+          },
+          "protocolMappers": [
+            {
+              "name": "email",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "config": {
+                "user.attribute": "email",
+                "claim.name": "email",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "email verified",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-property-mapper",
+              "config": {
+                "user.attribute": "emailVerified",
+                "claim.name": "email_verified",
+                "jsonType.label": "boolean",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            }
+          ]
+        },
+        {
+          "name": "roles",
+          "description": "OpenID Connect scope for user roles",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "false",
+            "display.on.consent.screen": "true"
+          },
+          "protocolMappers": [
+            {
+              "name": "realm roles",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-realm-role-mapper",
+              "config": {
+                "multivalued": "true",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "false",
+                "claim.name": "realm_access.roles",
+                "jsonType.label": "String"
+              }
+            },
+            {
+              "name": "client roles",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-client-role-mapper",
+              "config": {
+                "multivalued": "true",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "false",
+                "claim.name": "resource_access.${client_id}.roles",
+                "jsonType.label": "String"
+              }
+            }
+          ]
+        },
+        {
+          "name": "web-origins",
+          "description": "OpenID Connect scope for allowed web origins",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "false",
+            "display.on.consent.screen": "false"
+          },
+          "protocolMappers": [
+            {
+              "name": "allowed web origins",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-allowed-origins-mapper",
+              "config": {}
+            }
+          ]
+        },
+        {
+          "name": "acr",
+          "description": "OpenID Connect scope for authentication context class reference",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "false",
+            "display.on.consent.screen": "false"
+          },
+          "protocolMappers": [
+            {
+              "name": "acr loa level",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-acr-mapper",
+              "config": {
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "false"
+              }
+            }
+          ]
+        },
+        {
+          "name": "coldchain-scope",
+          "description": "Cold chain custom claims",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "true",
+            "display.on.consent.screen": "false"
+          },
           "protocolMappers": [
             {
               "name": "group_id",
@@ -99,7 +298,8 @@ data:
                 "claim.name": "group_id",
                 "jsonType.label": "String",
                 "id.token.claim": "true",
-                "access.token.claim": "true"
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
               }
             },
             {
@@ -111,7 +311,8 @@ data:
                 "claim.name": "role",
                 "jsonType.label": "String",
                 "id.token.claim": "true",
-                "access.token.claim": "true"
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
               }
             }
           ]
@@ -125,7 +326,13 @@ data:
           "lastName": "Admin",
           "enabled": true,
           "emailVerified": true,
-          "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+          "credentials": [
+            {
+              "type": "password",
+              "value": "admin123",
+              "temporary": false
+            }
+          ],
           "attributes": {
             "group_id": ["a0000000-0000-0000-0000-000000000001"],
             "role": ["admin"]
@@ -140,7 +347,13 @@ data:
           "lastName": "Viewer",
           "enabled": true,
           "emailVerified": true,
-          "credentials": [{ "type": "password", "value": "viewer123", "temporary": false }],
+          "credentials": [
+            {
+              "type": "password",
+              "value": "viewer123",
+              "temporary": false
+            }
+          ],
           "attributes": {
             "group_id": ["a0000000-0000-0000-0000-000000000001"],
             "role": ["viewer"]
@@ -150,3 +363,7 @@ data:
         }
       ]
     }
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+  namespace: coldchain
