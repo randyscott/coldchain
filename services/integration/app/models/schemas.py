@@ -55,6 +55,7 @@ class SystemOut(BaseModel):
     longitude: Optional[float]
     timezone: str
     is_active: bool
+    chirpstack_application_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     # Computed fields added by the API
@@ -75,6 +76,10 @@ class DeviceCreate(BaseModel):
     model: Optional[str] = None
     name: str
     description: Optional[str] = None
+    # ChirpStack OTAA registration fields (sensors only)
+    device_profile_id: Optional[str] = None   # ChirpStack device profile UUID
+    app_eui: Optional[str] = Field(default=None, min_length=16, max_length=16)  # JoinEUI / AppEUI (hex)
+    app_key: Optional[str] = Field(default=None, min_length=32, max_length=32)  # OTAA AppKey (hex)
 
 
 class DeviceUpdate(BaseModel):
@@ -82,6 +87,33 @@ class DeviceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+class DeviceProfileCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    region: str = Field(default="EU868")
+    mac_version: str = Field(default="LORAWAN_1_0_3")
+    reg_params_revision: str = Field(default="RP002_1_0_3")
+    supports_otaa: bool = True
+    supports_class_b: bool = False
+    supports_class_c: bool = False
+    uplink_interval: int = Field(default=3600, ge=0, description="Expected uplink interval in seconds")
+    flush_queue_on_activate: bool = True
+    device_status_req_interval: int = Field(default=1, ge=0)
+    adr_algorithm_id: str = "default"
+
+
+class DeviceProfileOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    region: str
+    mac_version: str
+    reg_params_revision: str
+    supports_otaa: bool
+    supports_class_b: bool
+    supports_class_c: bool
 
 
 class DeviceOut(BaseModel):
@@ -98,6 +130,7 @@ class DeviceOut(BaseModel):
     battery_level: Optional[float]
     signal_rssi: Optional[int]
     signal_snr: Optional[float]
+    chirpstack_device_profile_id: Optional[str] = None
     is_active: bool
     created_at: datetime
     # Latest reading (optionally populated)

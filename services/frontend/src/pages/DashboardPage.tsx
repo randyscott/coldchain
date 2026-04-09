@@ -1,10 +1,17 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, AlertTriangle, Thermometer, Wifi } from 'lucide-react';
+import { Activity, AlertTriangle, Plus, Thermometer, Wifi } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '../api/client';
 import { SystemCard } from '../components/dashboard/SystemCard';
+import { SystemModal } from '../components/system/SystemModal';
+import { useAuth } from '../hooks/useAuth';
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [showNewSystem, setShowNewSystem] = useState(false);
+
   const { data: systems, isLoading, error, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['systemSummary'],
     queryFn: api.getSystemSummary,
@@ -39,18 +46,29 @@ export function DashboardPage() {
   return (
     <div>
       {/* Page header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold text-white">Dashboard</h2>
-        <div className="flex items-center gap-2 mt-1">
-          <p className="text-cold-300/70 text-sm">Real-time overview of all monitored systems</p>
-          {dataUpdatedAt > 0 && (
-            <span className="text-xs text-cold-500 flex items-center gap-1">
-              ·
-              {isFetching && <span className="w-1.5 h-1.5 rounded-full bg-cold-400 animate-pulse inline-block" />}
-              {format(dataUpdatedAt, 'HH:mm:ss')}
-            </span>
-          )}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Dashboard</h2>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-cold-300/70 text-sm">Real-time overview of all monitored systems</p>
+            {dataUpdatedAt > 0 && (
+              <span className="text-xs text-cold-500 flex items-center gap-1">
+                ·
+                {isFetching && <span className="w-1.5 h-1.5 rounded-full bg-cold-400 animate-pulse inline-block" />}
+                {format(dataUpdatedAt, 'HH:mm:ss')}
+              </span>
+            )}
+          </div>
         </div>
+        {isAdmin && (
+          <button
+            onClick={() => setShowNewSystem(true)}
+            className="btn-primary flex items-center gap-2 flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            New System
+          </button>
+        )}
       </div>
 
       {/* Summary stats */}
@@ -101,11 +119,22 @@ export function DashboardPage() {
         <div className="card p-12 text-center">
           <Thermometer className="w-12 h-12 text-cold-600 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-cold-200 mb-2">No systems configured</h3>
-          <p className="text-cold-400 text-sm">
-            Systems will appear here once devices are registered and reporting data.
+          <p className="text-cold-400 text-sm mb-6">
+            Create a system to get started, then register gateways and sensors.
           </p>
+          {isAdmin && (
+            <button
+              onClick={() => setShowNewSystem(true)}
+              className="btn-primary inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create First System
+            </button>
+          )}
         </div>
       )}
+
+      {showNewSystem && <SystemModal onClose={() => setShowNewSystem(false)} />}
     </div>
   );
 }

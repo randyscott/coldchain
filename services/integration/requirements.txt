@@ -14,6 +14,10 @@ alembic>=1.14.0
 # MQTT
 aiomqtt>=2.3.0
 
+# ChirpStack gRPC API
+chirpstack-api>=4.0.0
+grpcio>=1.62.0
+
 # Auth
 python-jose[cryptography]>=3.3.0
 httpx>=0.27.0

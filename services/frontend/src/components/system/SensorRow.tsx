@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Wifi, WifiOff, Battery, Radio } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wifi, WifiOff, Battery, Radio, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import type { Device } from '../../api/client';
@@ -11,9 +11,10 @@ interface Props {
   device: Device;
   thresholdHigh?: number;
   thresholdLow?: number;
+  onDelete?: () => void;
 }
 
-export function SensorRow({ device, thresholdHigh, thresholdLow }: Props) {
+export function SensorRow({ device, thresholdHigh, thresholdLow, onDelete }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   const isOnline = device.last_seen_at
@@ -31,9 +32,10 @@ export function SensorRow({ device, thresholdHigh, thresholdLow }: Props) {
   return (
     <div className="card overflow-hidden">
       {/* Sensor header row */}
+      <div className="flex items-stretch">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-5 py-4 flex items-center gap-4 hover:bg-cold-800/30 transition-colors text-left"
+        className="flex-1 px-5 py-4 flex items-center gap-4 hover:bg-cold-800/30 transition-colors text-left"
       >
         {/* Online indicator */}
         <div className="flex-shrink-0 flex items-center gap-1.5">
@@ -110,6 +112,16 @@ export function SensorRow({ device, thresholdHigh, thresholdLow }: Props) {
           )}
         </div>
       </button>
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="px-3 flex items-center text-cold-600 hover:text-alert-critical hover:bg-cold-800/30 transition-colors border-l border-cold-700/20"
+          title="Delete sensor"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+      </div>
 
       {/* Expanded: temperature chart */}
       {expanded && (

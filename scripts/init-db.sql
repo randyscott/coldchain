@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS systems (
     address         TEXT,
     latitude        DOUBLE PRECISION,
     longitude       DOUBLE PRECISION,
+    -- ChirpStack integration
+    chirpstack_application_id TEXT,
     -- Metadata
     timezone        VARCHAR(100) DEFAULT 'UTC',
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
@@ -79,6 +81,7 @@ CREATE TABLE IF NOT EXISTS devices (
     description     TEXT,
     -- ChirpStack linkage
     chirpstack_device_id VARCHAR(255),
+    chirpstack_device_profile_id TEXT,
     -- Device metadata
     firmware_version VARCHAR(100),
     hardware_version VARCHAR(100),

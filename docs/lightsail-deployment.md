@@ -200,7 +200,48 @@ The k3s API (6443) should remain closed to the public.
 
 ---
 
-## 10. Build and push images
+## 10. Configure ChirpStack credentials
+
+ChirpStack generates a new tenant ID on every fresh install, and API tokens are
+instance-specific. After standing up ChirpStack on Lightsail you must update both values.
+
+**Get the values from the ChirpStack web UI:**
+- **Tenant ID** — Tenants → your tenant → copy the UUID from the URL bar
+- **API token** — API Keys → Add API key → copy the token (it is only shown once)
+
+**Apply the API token as a k8s Secret** (never commit the real token to git):
+
+```bash
+kubectl create secret generic chirpstack-api-credentials \
+  -n coldchain \
+  --from-literal=COLDCHAIN_CHIRPSTACK_API_TOKEN="<your-api-token>" \
+  --save-config --dry-run=client -o yaml | kubectl apply -f -
+```
+
+**Apply the tenant ID to the integration ConfigMap:**
+
+```bash
+kubectl patch configmap integration-config -n coldchain \
+  --patch '{"data": {"COLDCHAIN_CHIRPSTACK_TENANT_ID": "<your-tenant-id>"}}'
+```
+
+Then restart the integration service to pick up the new values:
+
+```bash
+kubectl rollout restart -n coldchain deployment/integration
+```
+
+**For local development** (docker-compose), store the values in the `.env` file in the
+repo root — it is gitignored and read automatically by docker-compose:
+
+```
+COLDCHAIN_CHIRPSTACK_TENANT_ID=<your-tenant-id>
+COLDCHAIN_CHIRPSTACK_API_TOKEN=<your-api-token>
+```
+
+---
+
+## 11. Build and push images
 
 Since Lightsail won't have a registry, the simplest approach is to build images directly
 on the instance:

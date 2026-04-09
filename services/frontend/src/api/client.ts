@@ -26,6 +26,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `API error: ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -76,10 +77,71 @@ export interface Device {
   battery_level: number | null;
   signal_rssi: number | null;
   signal_snr: number | null;
+  chirpstack_device_profile_id: string | null;
   is_active: boolean;
   created_at: string;
   latest_temperature: number | null;
   latest_humidity: number | null;
+}
+
+export interface DeviceProfile {
+  id: string;
+  name: string;
+  description: string | null;
+  region: string;
+  mac_version: string;
+  reg_params_revision: string;
+  supports_otaa: boolean;
+  supports_class_b: boolean;
+  supports_class_c: boolean;
+}
+
+export interface DeviceProfileCreate {
+  name: string;
+  description?: string | null;
+  region: string;
+  mac_version: string;
+  reg_params_revision: string;
+  supports_otaa?: boolean;
+  supports_class_b?: boolean;
+  supports_class_c?: boolean;
+  uplink_interval?: number;
+  flush_queue_on_activate?: boolean;
+  device_status_req_interval?: number;
+  adr_algorithm_id?: string;
+}
+
+export interface SystemCreate {
+  name: string;
+  description?: string | null;
+  system_type: 'fixed' | 'transport';
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  timezone?: string;
+}
+
+export interface SystemUpdate {
+  name?: string;
+  description?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  timezone?: string;
+  is_active?: boolean;
+}
+
+export interface DeviceCreate {
+  system_id: string;
+  dev_eui: string;
+  device_type: 'gateway' | 'sensor';
+  name: string;
+  manufacturer?: string | null;
+  model?: string | null;
+  description?: string | null;
+  device_profile_id?: string | null;
+  app_eui?: string | null;
+  app_key?: string | null;
 }
 
 export interface Reading {
@@ -172,6 +234,19 @@ export const api = {
   getSystems: () => request<System[]>('/systems'),
   getSystemSummary: () => request<SystemSummary[]>('/systems/summary'),
   getSystem: (id: string) => request<System>(`/systems/${id}`),
+  createSystem: (data: SystemCreate) =>
+    request<System>('/systems', { method: 'POST', body: JSON.stringify(data) }),
+  updateSystem: (id: string, data: SystemUpdate) =>
+    request<System>(`/systems/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteSystem: (id: string) =>
+    request<void>(`/systems/${id}`, { method: 'DELETE' }),
+
+  // Device profiles
+  getDeviceProfiles: () => request<DeviceProfile[]>('/devices/profiles'),
+  createDeviceProfile: (data: DeviceProfileCreate) =>
+    request<DeviceProfile>('/devices/profiles', { method: 'POST', body: JSON.stringify(data) }),
+  deleteDeviceProfile: (id: string) =>
+    request<void>(`/devices/profiles/${id}`, { method: 'DELETE' }),
 
   // Devices
   getDevices: (params?: { system_id?: string; device_type?: string }) => {
@@ -182,6 +257,10 @@ export const api = {
     return request<Device[]>(`/devices${query ? `?${query}` : ''}`);
   },
   getDevice: (id: string) => request<Device>(`/devices/${id}`),
+  createDevice: (data: DeviceCreate) =>
+    request<Device>('/devices', { method: 'POST', body: JSON.stringify(data) }),
+  deleteDevice: (id: string) =>
+    request<void>(`/devices/${id}`, { method: 'DELETE' }),
 
   // Readings
   getDeviceReadings: (deviceId: string, params?: { start?: string; end?: string; limit?: number }) => {

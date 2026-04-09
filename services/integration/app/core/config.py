@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     mqtt_password: str = Field(default="coldchain_dev")
     mqtt_topic_prefix: str = Field(default="application/+/device/+/event/up")
 
+    # --- ChirpStack ---
+    chirpstack_api_url: str = Field(
+        default="localhost:8080",
+        description="ChirpStack gRPC API endpoint (host:port, no scheme)",
+    )
+    chirpstack_api_token: str = Field(
+        default="",
+        description="ChirpStack API token (created in ChirpStack web UI under API Keys)",
+    )
+    # Tenant ID in ChirpStack that coldchain devices belong to.
+    # Find it in ChirpStack UI: Tenants → your tenant → copy the UUID from the URL.
+    chirpstack_tenant_id: str = Field(default="")
+
     # --- Auth (Keycloak) ---
     keycloak_url: str = Field(default="http://localhost:8081/auth")
     keycloak_realm: str = Field(default="coldchain")

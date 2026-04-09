@@ -15,6 +15,8 @@ data:
   COLDCHAIN_KEYCLOAK_URL: "http://keycloak:8081/auth"
   COLDCHAIN_KEYCLOAK_REALM: "coldchain"
   COLDCHAIN_KEYCLOAK_CLIENT_ID: "coldchain-api"
+  COLDCHAIN_CHIRPSTACK_API_URL: "chirpstack:8080"
+  COLDCHAIN_CHIRPSTACK_TENANT_ID: ""
   COLDCHAIN_ENVIRONMENT: "development"
   COLDCHAIN_LOG_LEVEL: "INFO"
   COLDCHAIN_SMTP_HOST: "mailhog"
@@ -56,6 +58,11 @@ spec:
                 secretKeyRef:
                   name: timescaledb-credentials
                   key: DATABASE_URL
+            - name: COLDCHAIN_CHIRPSTACK_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: chirpstack-api-credentials
+                  key: COLDCHAIN_CHIRPSTACK_API_TOKEN
           resources:
             requests:
               memory: "128Mi"

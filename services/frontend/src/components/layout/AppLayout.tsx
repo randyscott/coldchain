@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Thermometer, LayoutDashboard, Bell, LogOut } from 'lucide-react';
+import { Thermometer, LayoutDashboard, Bell, LogOut, Cpu } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
 import { useAlertStream } from '../../hooks/useAlertStream';
@@ -53,6 +53,17 @@ export function AppLayout() {
                   </span>
                 )}
               </NavLink>
+              {user?.role === 'admin' && (
+                <NavLink
+                  to="/profiles"
+                  className={({ isActive }) =>
+                    clsx(isActive ? 'nav-link-active' : 'nav-link', 'flex items-center gap-2')
+                  }
+                >
+                  <Cpu className="w-4 h-4" />
+                  Profiles
+                </NavLink>
+              )}
             </nav>
 
             {/* User */}
