@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit_log
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_db
 from app.models.schemas import UserOut, UserUpdate
@@ -81,4 +82,10 @@ async def update_user(
     )
     await db.commit()
     row = result.mappings().first()
+    action = "user.deactivated" if updates.get("is_active") is False \
+        else "user.reactivated" if updates.get("is_active") is True \
+        else "user.updated"
+    await audit_log(db, current_user, action, "user", user_id,
+                    {k: v for k, v in body.model_dump(exclude_none=True).items()})
+    await db.commit()
     return UserOut(**row)

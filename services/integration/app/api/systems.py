@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit_log
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_db
 from app.models.schemas import (
@@ -170,6 +171,8 @@ async def create_system(
     )
     await db.commit()
     row = result.mappings().first()
+    await audit_log(db, user, "system.created", "system", row["id"], {"name": row["name"]})
+    await db.commit()
     return SystemOut(**row)
 
 
@@ -201,6 +204,10 @@ async def update_system(
     row = result.mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="System not found")
+
+    await audit_log(db, user, "system.updated", "system", system_id,
+                    {k: v for k, v in body.model_dump(exclude_none=True).items()})
+    await db.commit()
 
     # Sync name/description changes to ChirpStack if the system has an application
     cs_app_id = row.get("chirpstack_application_id")
@@ -245,6 +252,8 @@ async def delete_system(
         text("DELETE FROM systems WHERE id = :id AND group_id = :gid"),
         {"id": system_id, "gid": user.group_id},
     )
+    await audit_log(db, user, "system.deleted", "system", system_id,
+                    {"chirpstack_application_id": cs_app_id})
     await db.commit()
 
     # Delete from ChirpStack (best-effort — don't fail if already gone)

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit_log
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_db
 from app.models.schemas import DeviceCreate, DeviceUpdate, DeviceOut, DeviceProfileCreate, DeviceProfileOut
@@ -273,6 +274,10 @@ async def create_device(
     invalidate_device_cache(body.dev_eui)
 
     row = result.mappings().first()
+    await audit_log(db, user, "device.registered", "device", row["id"],
+                    {"name": row["name"], "dev_eui": row["dev_eui"],
+                     "device_type": row["device_type"], "system_id": str(body.system_id)})
+    await db.commit()
     return DeviceOut(**row)
 
 
@@ -354,6 +359,8 @@ async def delete_device(
         text("DELETE FROM devices WHERE id = :id"),
         {"id": device_id},
     )
+    await audit_log(db, user, "device.deleted", "device", device_id,
+                    {"dev_eui": dev_eui, "device_type": device_type})
     await db.commit()
 
     from app.services.mqtt_ingestion import invalidate_device_cache

@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit_log, get_user_db_id
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_db
 from app.models.schemas import (
@@ -160,6 +161,10 @@ async def create_alert_rule(
     )
     await db.commit()
     row = result.mappings().first()
+    await audit_log(db, user, "alert_rule.created", "alert_rule", row["id"],
+                    {"name": row["name"], "rule_type": row["rule_type"],
+                     "system_id": str(body.system_id)})
+    await db.commit()
     return AlertRuleOut(**row)
 
 
@@ -197,6 +202,9 @@ async def update_alert_rule(
     row = result.mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="Alert rule not found")
+    await audit_log(db, user, "alert_rule.updated", "alert_rule", rule_id,
+                    {k: v for k, v in body.model_dump(exclude_none=True).items()})
+    await db.commit()
     return AlertRuleOut(**row)
 
 
@@ -214,6 +222,7 @@ async def delete_alert_rule(
         """),
         {"rule_id": rule_id, "group_id": user.group_id},
     )
+    await audit_log(db, user, "alert_rule.deleted", "alert_rule", rule_id, None)
     await db.commit()
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Alert rule not found")
@@ -278,11 +287,13 @@ async def acknowledge_alert(
     db: AsyncSession = Depends(get_db),
 ):
     """Acknowledge an alert event."""
+    user_db_id = await get_user_db_id(db, user.user_id)
+
     result = await db.execute(
         text("""
             UPDATE alert_events ae
             SET acknowledged_at = NOW(),
-                acknowledged_by = :user_id,
+                acknowledged_by = :user_db_id,
                 acknowledge_note = :note
             FROM alert_rules ar
             JOIN systems s ON ar.system_id = s.id
@@ -293,12 +304,14 @@ async def acknowledge_alert(
             RETURNING ae.id
         """),
         {
-            "event_id": event_id,
-            "user_id": user.user_id,
-            "note": body.note,
-            "group_id": user.group_id,
+            "event_id":    event_id,
+            "user_db_id":  user_db_id,
+            "note":        body.note,
+            "group_id":    user.group_id,
         },
     )
+    await audit_log(db, user, "alert.acknowledged", "alert_event", event_id,
+                    {"note": body.note})
     await db.commit()
     if not result.first():
         raise HTTPException(

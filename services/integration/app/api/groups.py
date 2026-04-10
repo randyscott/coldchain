@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit_log
 from app.core.auth import CurrentUser, require_role
 from app.core.database import get_db
 from app.models.schemas import GroupOut, GroupUpdate
@@ -58,4 +59,7 @@ async def update_my_group(
     )
     await db.commit()
     row = result.mappings().first()
+    await audit_log(db, user, "group.updated", "group", user.group_id,
+                    body.model_dump(exclude_none=True))
+    await db.commit()
     return GroupOut(**row)

@@ -141,9 +141,13 @@ async def _process_uplink(pool: asyncpg.Pool, topic: str, payload: dict):
         rssi = best_rx.get("rssi")
         snr = best_rx.get("snr")
 
-        # Extract measurements
+        # Extract measurements.
+        # Log the full object at DEBUG level so field-name issues are easy to diagnose
+        # when connecting a new sensor type (e.g. RS26x vs RS1xx field names differ).
+        logger.debug(f"Decoded object from {dev_eui}: {measurements}")
+
         temperature = measurements.get("temperature")
-        humidity = measurements.get("humidity")
+        humidity = measurements.get("humidity")          # None for RS26x (temperature-only)
         battery_voltage = measurements.get("batteryVoltage")
         latitude = measurements.get("latitude")
         longitude = measurements.get("longitude")
@@ -200,7 +204,9 @@ async def _process_uplink(pool: asyncpg.Pool, topic: str, payload: dict):
 
         logger.info(
             f"📥 {device['name']} ({dev_eui}): "
-            f"T={temperature}°C H={humidity}% B={battery_voltage}V "
+            f"T={f'{temperature:.2f}°C' if temperature is not None else '—'} "
+            f"H={f'{humidity:.1f}%' if humidity is not None else '—'} "
+            f"B={f'{battery_voltage:.3f}V' if battery_voltage is not None else '—'} "
             f"RSSI={rssi} SNR={snr}"
         )
 
