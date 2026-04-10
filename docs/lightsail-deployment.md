@@ -176,23 +176,37 @@ COLDCHAIN_KEYCLOAK_CLIENT_ID: "coldchain-api"
 
 ## 7. Update the frontend build
 
-The frontend Keycloak URL is baked in at build time via Vite env vars. Set these when
-building the production image:
+The production frontend container is a two-stage Docker build:
+- **Stage 1** (Node): Vite compiles the React app into static files (`/app/dist`)
+- **Stage 2** (Nginx): copies those static files and serves them — Vite is not present at runtime
+
+The `VITE_` environment variables are consumed **at build time only** and baked into the
+compiled JS bundle. They are not read by nginx at runtime, so they must be set when
+building the image (not in a k8s ConfigMap or Secret).
+
+Pass them as Docker build args:
 
 ```bash
-VITE_KEYCLOAK_URL=https://coldchain.yourdomain.com/auth \
-VITE_KEYCLOAK_REALM=coldchain \
-VITE_KEYCLOAK_CLIENT_ID=coldchain-web \
-docker build -t coldchain/frontend:prod services/frontend/
+docker build \
+  --build-arg VITE_KEYCLOAK_URL=https://coldchain.yourdomain.com/auth \
+  --build-arg VITE_KEYCLOAK_REALM=coldchain \
+  --build-arg VITE_KEYCLOAK_CLIENT_ID=coldchain-web \
+  -t coldchain/frontend:prod \
+  services/frontend/
 ```
 
-Or add a `.env.production` file to `services/frontend/`:
+Or add a `.env.production` file to `services/frontend/` before building — Vite picks
+it up automatically:
 
 ```
 VITE_KEYCLOAK_URL=https://coldchain.yourdomain.com/auth
 VITE_KEYCLOAK_REALM=coldchain
 VITE_KEYCLOAK_CLIENT_ID=coldchain-web
 ```
+
+> **Note:** If you change the Keycloak URL or realm after the image is built, you must
+> rebuild and redeploy the frontend image. There is no way to override these values at
+> runtime without a rebuild.
 
 ---
 

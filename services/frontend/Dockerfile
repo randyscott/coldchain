@@ -5,6 +5,15 @@
 # Stage 1: Build
 FROM node:20-alpine AS build
 
+# Build-time Keycloak config — baked into the JS bundle by Vite.
+# Pass with: docker build --build-arg VITE_KEYCLOAK_URL=https://...
+ARG VITE_KEYCLOAK_URL
+ARG VITE_KEYCLOAK_REALM=coldchain
+ARG VITE_KEYCLOAK_CLIENT_ID=coldchain-web
+ENV VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL
+ENV VITE_KEYCLOAK_REALM=$VITE_KEYCLOAK_REALM
+ENV VITE_KEYCLOAK_CLIENT_ID=$VITE_KEYCLOAK_CLIENT_ID
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

@@ -71,7 +71,7 @@ function MemberRow({ member, isSelf, isAdmin }: RowProps) {
               <span className="font-medium text-white truncate">{member.display_name}</span>
               {isSelf && <span className="text-xs text-cold-500">(you)</span>}
               {member.is_platform_admin && (
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" title="Platform admin" />
+                <span title="Platform admin"><ShieldCheck className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" /></span>
               )}
             </div>
             <div className="text-xs text-cold-400 truncate">{member.email}</div>

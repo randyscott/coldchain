@@ -40,7 +40,7 @@ export function GroupSwitcher() {
 
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <ShieldCheck className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" title="Platform admin" />
+      <span title="Platform admin"><ShieldCheck className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" /></span>
       <select
         value={current}
         onChange={e => handleChange(e.target.value)}

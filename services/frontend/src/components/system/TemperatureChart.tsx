@@ -164,7 +164,7 @@ function AggChart({ readings, thresholdHigh, thresholdLow, height = 300, xAxisFo
           }}
         />
         <Legend
-          formatter={v => ({ avg: 'Avg', min: 'Min', max: 'Max' }[v] ?? v)}
+          formatter={(v: string) => (({ avg: 'Avg', min: 'Min', max: 'Max' } as Record<string, string>)[v] ?? v)}
           wrapperStyle={{ fontSize: 11, color: '#4a7fb5' }}
         />
         {thresholdHigh != null && (

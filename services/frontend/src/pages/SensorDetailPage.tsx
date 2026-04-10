@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Battery, Radio, Wifi, WifiOff, Thermometer, Droplets } from 'lucide-react';
-import { subHours, subDays, startOfDay, endOfDay, format } from 'date-fns';
+import { subHours, subDays, format } from 'date-fns';
 import { api } from '../api/client';
 import { TemperatureChart } from '../components/system/TemperatureChart';
 import { formatTemp, formatHumidity, formatBattery, formatTimeAgo, formatTimestamp } from '../utils/format';
