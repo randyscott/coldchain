@@ -297,6 +297,40 @@ export const api = {
   // Platform admin
   getAllGroups: () => request<Group[]>('/admin/groups'),
 
+  // Reports — returns a Blob for direct download
+  downloadComplianceReport: (params: {
+    system_id: string;
+    start: string;
+    end: string;
+    format: 'csv' | 'pdf';
+    device_id?: string;
+  }): Promise<{ blob: Blob; filename: string }> => {
+    const qs = new URLSearchParams({
+      system_id: params.system_id,
+      start:     params.start,
+      end:       params.end,
+      format:    params.format,
+    });
+    if (params.device_id) qs.set('device_id', params.device_id);
+
+    const token = sessionStorage.getItem('access_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (_asGroupId) headers['X-As-Group'] = _asGroupId;
+
+    return fetch(`${BASE}/reports/compliance?${qs}`, { headers }).then(async res => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `Report error: ${res.status}`);
+      }
+      const blob = await res.blob();
+      const cd   = res.headers.get('Content-Disposition') ?? '';
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? `compliance_report.${params.format}`;
+      return { blob, filename };
+    });
+  },
+
   // Users (team management)
   getUsers: () => request<TeamUser[]>('/users'),
   updateUser: (id: string, data: TeamUserUpdate) =>

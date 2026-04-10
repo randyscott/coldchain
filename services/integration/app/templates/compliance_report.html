@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Compliance Report — {{ system.name }}</title>
+<style>
+  /* ── Page setup ────────────────────────────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 18mm 18mm 22mm 18mm;
+    @bottom-center {
+      content: "Cold Chain Monitor — Confidential  |  Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #6b7280;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+  }
+
+  /* ── Base ──────────────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    color: #111827;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0;
+  }
+  h1 { font-size: 18pt; margin: 0 0 2mm; color: #0f172a; font-weight: 700; }
+  h2 { font-size: 11pt; margin: 6mm 0 2mm; color: #0f172a; font-weight: 600;
+       border-bottom: 0.5pt solid #d1d5db; padding-bottom: 1mm; }
+  h3 { font-size: 9.5pt; margin: 4mm 0 1.5mm; color: #1e3a5f; font-weight: 600; }
+  p  { margin: 0 0 2mm; }
+
+  /* ── Cover header ──────────────────────────────────────────────────────── */
+  .cover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 5mm;
+    border-bottom: 1pt solid #1e3a5f;
+    margin-bottom: 5mm;
+  }
+  .logo-area { color: #1e3a5f; }
+  .logo-area .brand { font-size: 13pt; font-weight: 700; color: #1e3a5f; }
+  .logo-area .brand-sub { font-size: 8pt; color: #6b7280; }
+  .report-meta { text-align: right; font-size: 8pt; color: #6b7280; }
+  .report-meta strong { color: #374151; }
+
+  /* ── Summary grid ──────────────────────────────────────────────────────── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3mm;
+    margin: 4mm 0;
+  }
+  .summary-card {
+    border: 0.5pt solid #d1d5db;
+    border-radius: 2mm;
+    padding: 3mm 4mm;
+    background: #f8fafc;
+  }
+  .summary-card .label { font-size: 7.5pt; color: #6b7280; text-transform: uppercase;
+                          letter-spacing: 0.03em; margin-bottom: 1mm; }
+  .summary-card .value { font-size: 14pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .summary-card .sub   { font-size: 7.5pt; color: #6b7280; margin-top: 0.5mm; }
+  .card-warn  { border-color: #dc2626; background: #fff5f5; }
+  .card-warn .value { color: #dc2626; }
+  .card-ok    { border-color: #16a34a; background: #f0fdf4; }
+  .card-ok .value { color: #16a34a; }
+
+  /* ── Tables ────────────────────────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 4mm;
+    font-size: 8.5pt;
+  }
+  thead tr { background: #1e3a5f; color: #fff; }
+  thead th {
+    padding: 2mm 3mm;
+    text-align: left;
+    font-weight: 600;
+    font-size: 8pt;
+    letter-spacing: 0.02em;
+  }
+  thead th.num { text-align: right; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody tr:hover { background: #f1f5f9; }
+  tbody td { padding: 1.8mm 3mm; border-bottom: 0.3pt solid #e5e7eb; vertical-align: top; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; font-family: 'Courier New', monospace; font-size: 8pt; }
+  tbody td.mono { font-family: 'Courier New', monospace; font-size: 7.5pt; color: #374151; }
+
+  /* ── Status badges ─────────────────────────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    padding: 0.4mm 2mm;
+    border-radius: 2mm;
+    font-size: 7.5pt;
+    font-weight: 600;
+  }
+  .badge-critical { background: #fee2e2; color: #dc2626; }
+  .badge-ok       { background: #dcfce7; color: #16a34a; }
+  .badge-ongoing  { background: #fef9c3; color: #ca8a04; }
+
+  /* ── Excursion highlight row ───────────────────────────────────────────── */
+  tr.excursion-row td { background: #fff5f5 !important; }
+
+  /* ── Section break ─────────────────────────────────────────────────────── */
+  .page-break { page-break-before: always; }
+  .no-break   { page-break-inside: avoid; }
+
+  /* ── Footer note ───────────────────────────────────────────────────────── */
+  .footer-note {
+    margin-top: 8mm;
+    padding-top: 3mm;
+    border-top: 0.5pt solid #e5e7eb;
+    font-size: 7.5pt;
+    color: #9ca3af;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     COVER / HEADER
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="cover-header">
+  <div class="logo-area">
+    <div class="brand">Cold Chain Monitor</div>
+    <div class="brand-sub">Temperature Compliance Report</div>
+  </div>
+  <div class="report-meta">
+    <div><strong>System:</strong> {{ system.name }}</div>
+    {% if system.address %}<div><strong>Location:</strong> {{ system.address }}</div>{% endif %}
+    <div><strong>Period:</strong> {{ period_start }} — {{ period_end }}</div>
+    <div><strong>Generated:</strong> {{ generated_at }}</div>
+    <div><strong>Generated by:</strong> {{ generated_by }}</div>
+    <div><strong>Group:</strong> {{ group_name }}</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     EXECUTIVE SUMMARY
+═══════════════════════════════════════════════════════════════════════════ -->
+<h2>Executive Summary</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="label">Sensors Monitored</div>
+    <div class="value">{{ summary.sensor_count }}</div>
+    <div class="sub">in {{ system.name }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Total Readings</div>
+    <div class="value">{{ "{:,}".format(summary.total_readings) }}</div>
+    <div class="sub">over {{ summary.period_hours }}h</div>
+  </div>
+  <div class="summary-card {% if summary.excursion_count > 0 %}card-warn{% else %}card-ok{% endif %}">
+    <div class="label">Excursions</div>
+    <div class="value">{{ summary.excursion_count }}</div>
+    <div class="sub">{% if summary.excursion_count == 0 %}None recorded{% else %}{{ summary.excursion_duration_str }} total{% endif %}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Temp Range</div>
+    <div class="value">{{ summary.global_min_str }}–{{ summary.global_max_str }}</div>
+    <div class="sub">avg {{ summary.global_avg_str }}</div>
+  </div>
+</div>
+
+<!-- Per-sensor overview table -->
+<h2>Sensor Overview</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Sensor</th>
+      <th>DevEUI</th>
+      <th class="num">Readings</th>
+      <th class="num">Min °C</th>
+      <th class="num">Avg °C</th>
+      <th class="num">Max °C</th>
+      <th class="num">Excursions</th>
+      <th class="num">Excursion Time</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in sensors %}
+    <tr class="{% if s.excursion_count > 0 %}excursion-row{% endif %}">
+      <td>{{ s.name }}</td>
+      <td class="mono">{{ s.dev_eui.upper() }}</td>
+      <td class="num">{{ "{:,}".format(s.total_readings) }}</td>
+      <td class="num">{{ s.min_temp_str }}</td>
+      <td class="num">{{ s.avg_temp_str }}</td>
+      <td class="num">{{ s.max_temp_str }}</td>
+      <td class="num">{% if s.excursion_count > 0 %}<span class="badge badge-critical">{{ s.excursion_count }}</span>{% else %}<span class="badge badge-ok">0</span>{% endif %}</td>
+      <td class="num">{{ s.excursion_duration_str }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     EXCURSION DETAIL
+═══════════════════════════════════════════════════════════════════════════ -->
+{% if all_excursions %}
+<h2>Temperature Excursion Detail</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Sensor</th>
+      <th>Rule</th>
+      <th>Started</th>
+      <th>Resolved</th>
+      <th class="num">Duration</th>
+      <th class="num">Trigger °C</th>
+      <th class="num">Peak °C</th>
+      <th>Acknowledged</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in all_excursions %}
+    <tr>
+      <td>{{ e.device_name }}</td>
+      <td>{{ e.rule_name }}</td>
+      <td class="mono">{{ e.triggered_at_str }}</td>
+      <td class="mono">{% if e.resolved_at_str %}<span>{{ e.resolved_at_str }}</span>{% else %}<span class="badge badge-ongoing">Ongoing</span>{% endif %}</td>
+      <td class="num">{{ e.duration_str }}</td>
+      <td class="num">{% if e.trigger_value is not none %}{{ "%.2f"|format(e.trigger_value) }}{% else %}—{% endif %}</td>
+      <td class="num">{% if e.peak_value is not none %}{{ "%.2f"|format(e.peak_value) }}{% else %}—{% endif %}</td>
+      <td>{% if e.acknowledged_at_str %}{{ e.acknowledged_at_str }}<br><small>{{ e.acknowledged_by or '' }}</small>{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<h2>Temperature Excursions</h2>
+<p style="color:#16a34a; font-weight:600;">✓ No temperature excursions recorded during this period.</p>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     DAILY SUMMARY TABLE (one page per sensor for long reports)
+═══════════════════════════════════════════════════════════════════════════ -->
+{% for s in sensors %}
+{% if s.daily_rows %}
+<div class="page-break"></div>
+<h2>Daily Data — {{ s.name }}</h2>
+<p style="font-size:8pt; color:#6b7280;">DevEUI: {{ s.dev_eui.upper() }}{% if s.manufacturer %} · {{ s.manufacturer }} {{ s.model }}{% endif %}</p>
+<table>
+  <thead>
+    <tr>
+      <th>Date (UTC)</th>
+      <th class="num">Readings</th>
+      <th class="num">Min °C</th>
+      <th class="num">Avg °C</th>
+      <th class="num">Max °C</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in s.daily_rows %}
+    <tr class="{% if row.has_excursion %}excursion-row{% endif %}">
+      <td class="mono">{{ row.date }}</td>
+      <td class="num">{{ "{:,}".format(row.reading_count) }}</td>
+      <td class="num">{% if row.min_temp is not none %}{{ "%.2f"|format(row.min_temp) }}{% else %}—{% endif %}</td>
+      <td class="num">{% if row.avg_temp is not none %}{{ "%.2f"|format(row.avg_temp) }}{% else %}—{% endif %}</td>
+      <td class="num">{% if row.max_temp is not none %}{{ "%.2f"|format(row.max_temp) }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="footer-note">
+  This report was generated automatically by Cold Chain Monitor.
+  All timestamps are in UTC.
+  Temperature values are in degrees Celsius (°C).
+  Excursions are defined as periods where a temperature alert rule was triggered.
+  This document is intended for compliance and audit purposes.
+</div>
+
+</body>
+</html>

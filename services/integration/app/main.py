@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import auth, systems, devices, readings, alerts, users, groups, admin
+from app.api import auth, systems, devices, readings, alerts, users, groups, admin, reports
 from app.services.mqtt_ingestion import mqtt_subscriber, shutdown as mqtt_shutdown, set_alert_callback
 from app.services.alert_engine import evaluate_reading, connectivity_checker
 
@@ -90,6 +90,7 @@ app.include_router(auth.router,    prefix="/api/v1")
 app.include_router(users.router,   prefix="/api/v1")
 app.include_router(groups.router,  prefix="/api/v1")
 app.include_router(admin.router,   prefix="/api/v1")
+app.include_router(reports.router, prefix="/api/v1")
 app.include_router(systems.router, prefix="/api/v1")
 app.include_router(devices.router, prefix="/api/v1")
 app.include_router(readings.router, prefix="/api/v1")

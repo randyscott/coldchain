@@ -3,12 +3,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Truck, AlertTriangle, Clock,
-  CheckCircle2, XCircle, Pencil, Trash2, Plus, Wifi,
+  CheckCircle2, XCircle, Pencil, Trash2, Plus, Wifi, FileDown,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { SensorRow } from '../components/system/SensorRow';
 import { SystemModal } from '../components/system/SystemModal';
 import { DeviceModal } from '../components/system/DeviceModal';
+import { ReportModal } from '../components/system/ReportModal';
 import { formatTimestamp, formatTimeAgo, formatTemp } from '../utils/format';
 import { useAuth } from '../hooks/useAuth';
 
@@ -21,6 +22,7 @@ export function SystemDetailPage() {
 
   const [showEditSystem, setShowEditSystem] = useState(false);
   const [showRegisterDevice, setShowRegisterDevice] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [confirmDeleteSystem, setConfirmDeleteSystem] = useState(false);
   const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null);
 
@@ -175,44 +177,53 @@ export function SystemDetailPage() {
               </div>
             </div>
 
-            {/* Admin actions */}
-            {isAdmin && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowEditSystem(true)}
-                  className="btn-secondary flex items-center gap-1.5 text-xs py-1.5 px-3"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Edit
-                </button>
-                {confirmDeleteSystem ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-cold-400">Delete system?</span>
-                    <button
-                      onClick={() => deleteSystemMutation.mutate()}
-                      disabled={deleteSystemMutation.isPending}
-                      className="text-xs text-alert-critical hover:text-red-300 font-medium"
-                    >
-                      {deleteSystemMutation.isPending ? 'Deleting…' : 'Yes, delete'}
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteSystem(false)}
-                      className="text-xs text-cold-400 hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowReport(true)}
+                className="btn-secondary flex items-center gap-1.5 text-xs py-1.5 px-3"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                Export Report
+              </button>
+              {isAdmin && (
+                <>
                   <button
-                    onClick={() => setConfirmDeleteSystem(true)}
-                    className="text-cold-500 hover:text-alert-critical transition-colors p-1.5"
-                    title="Delete system"
+                    onClick={() => setShowEditSystem(true)}
+                    className="btn-secondary flex items-center gap-1.5 text-xs py-1.5 px-3"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Pencil className="w-3.5 h-3.5" />
+                    Edit
                   </button>
-                )}
-              </div>
-            )}
+                  {confirmDeleteSystem ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-cold-400">Delete system?</span>
+                      <button
+                        onClick={() => deleteSystemMutation.mutate()}
+                        disabled={deleteSystemMutation.isPending}
+                        className="text-xs text-alert-critical hover:text-red-300 font-medium"
+                      >
+                        {deleteSystemMutation.isPending ? 'Deleting…' : 'Yes, delete'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteSystem(false)}
+                        className="text-xs text-cold-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteSystem(true)}
+                      className="text-cold-500 hover:text-alert-critical transition-colors p-1.5"
+                      title="Delete system"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -447,6 +458,14 @@ export function SystemDetailPage() {
       )}
       {showRegisterDevice && systemId && (
         <DeviceModal systemId={systemId} onClose={() => setShowRegisterDevice(false)} />
+      )}
+      {showReport && system && systemId && (
+        <ReportModal
+          systemId={systemId}
+          systemName={system.name}
+          sensors={sensors}
+          onClose={() => setShowReport(false)}
+        />
       )}
     </div>
   );
