@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Wifi, WifiOff, Battery, Radio, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wifi, WifiOff, Battery, Radio, Trash2, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import type { Device } from '../../api/client';
 import { api } from '../../api/client';
@@ -57,7 +58,17 @@ export function SensorRow({ device, thresholdHigh, thresholdLow, onDelete }: Pro
 
         {/* Name */}
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-white truncate">{device.name}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-white truncate">{device.name}</span>
+            <Link
+              to={`/system/${device.system_id}/sensor/${device.id}`}
+              onClick={e => e.stopPropagation()}
+              className="text-cold-500 hover:text-cold-200 transition-colors flex-shrink-0"
+              title="Open sensor detail"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
           <div className="text-xs text-cold-400 mt-0.5">
             {device.manufacturer} {device.model} · {device.dev_eui}
           </div>
@@ -141,6 +152,7 @@ export function SensorRow({ device, thresholdHigh, thresholdLow, onDelete }: Pro
           </div>
           {readings ? (
             <TemperatureChart
+              mode="raw"
               readings={readings}
               thresholdHigh={thresholdHigh}
               thresholdLow={thresholdLow}
