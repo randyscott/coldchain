@@ -67,7 +67,6 @@ metadata:
   namespace: coldchain
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    traefik.ingress.kubernetes.io/router.middlewares: coldchain-strip-auth-prefix@kubernetescrd
 spec:
   tls:
     - hosts:
@@ -77,6 +76,13 @@ spec:
     - host: coldchain.yourdomain.com
       http:
         paths:
+          - path: /auth/callback
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
           - path: /auth
             pathType: Prefix
             backend:
@@ -107,9 +113,9 @@ args:
   - "start"
   - "--import-realm"
   - "--http-enabled=true"           # Keycloak speaks HTTP; TLS is terminated at the ingress
-  - "--hostname=coldchain.yourdomain.com"
+  - "--hostname=https://coldchain.salticidae.net"
   - "--hostname-strict=false"       # Allows internal cluster traffic without hostname match
-  - "--hostname-admin=localhost"    # Admin console only reachable via port-forward (see below)
+  - "--hostname-admin=http://localhost:8080"    # Admin console only reachable via port-forward (see below)
 ```
 
 ### Securing the Keycloak admin console
@@ -295,3 +301,33 @@ docker save coldchain/frontend:prod    | sudo k3s ctr images import -
 ```
 
 Then update the image tags in the deployment manifests from `:dev` to `:prod`.
+
+## 12. Management
+
+To access the Keycloak and Chirpstack management interfaces on the Lightsail
+instance, the first step is the port forwards:
+
+```bash
+kubectl port-forward -n coldchain svc/chirpstack 8080:8080 &
+kubectl port-forward -n coldchain svc/keycloak 8081:8081 &
+```
+
+On the local machine, open an SSH tunnel:
+
+```bash
+ssh -L 8080:localhost:8080 -L 8081:localhost:8081 ubuntu@lightsail
+```
+
+Then in your local browser:
+
+* ChirpStack: http://localhost:8080
+* Keycloak admin: http://localhost:8081/auth/admin
+
+You can combine both steps into a single command if you prefer:
+
+```bash
+ssh -L 8080:localhost:8080 -L 8081:localhost:8081 ubuntu@<lightsail-ip> \
+  "kubectl port-forward -n coldchain svc/chirpstack 8080:8080 & kubectl port-forward -n coldchain svc/keycloak 8081:8081 & wait"
+```
+
+This keeps the tunnel alive for as long as the SSH session is open, and closes cleanly when you Ctrl-C.
