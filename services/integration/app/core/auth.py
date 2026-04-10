@@ -6,11 +6,14 @@ import logging
 from dataclasses import dataclass
 
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,7 @@ class CurrentUser:
     group_id: str
     role: str  # admin, manager, viewer
     display_name: str
+    is_platform_admin: bool = False
 
 
 async def _get_jwks() -> dict:
@@ -49,8 +53,15 @@ async def _get_jwks() -> dict:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
-    """FastAPI dependency that extracts and validates the current user from a Keycloak JWT."""
+    """FastAPI dependency that extracts and validates the current user from a Keycloak JWT.
+
+    Platform admins may include an X-As-Group header to operate in the context of
+    a different group. The DB is checked to verify platform-admin status so the
+    header cannot be abused by ordinary users.
+    """
     token = credentials.credentials
 
     # Use public URL for issuer validation — the iss claim in the token reflects the URL
@@ -84,7 +95,7 @@ async def get_current_user(
         )
 
         # These claims are injected by the Keycloak protocol mappers configured in the realm.
-        return CurrentUser(
+        user = CurrentUser(
             user_id=payload.get("sub", ""),
             email=payload.get("email", ""),
             group_id=payload.get("group_id", ""),
@@ -105,6 +116,34 @@ async def get_current_user(
             detail="Authentication service unavailable",
         )
 
+    # Handle X-As-Group impersonation for platform admins.
+    # The DB check here is intentional — is_platform_admin cannot be forged via JWT.
+    as_group = request.headers.get("X-As-Group") if request else None
+    if as_group:
+        result = await db.execute(
+            text("SELECT is_platform_admin FROM users WHERE keycloak_id = :kid"),
+            {"kid": user.user_id},
+        )
+        row = result.first()
+        if not row or not row[0]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="X-As-Group header requires platform admin privileges",
+            )
+        # Verify the target group exists
+        grp = await db.execute(
+            text("SELECT id FROM groups WHERE id = CAST(:gid AS uuid)"),
+            {"gid": as_group},
+        )
+        if not grp.first():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+        user.group_id = as_group
+        user.role = "admin"          # platform admin gets full access in the target group
+        user.is_platform_admin = True
+
+    return user
+
 
 def require_role(*allowed_roles: str):
     """
@@ -119,3 +158,26 @@ def require_role(*allowed_roles: str):
             )
         return user
     return check_role
+
+
+async def require_platform_admin(
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CurrentUser:
+    """
+    Dependency that verifies the caller is a platform admin.
+    Performs a DB lookup so the flag cannot be forged via a crafted JWT.
+    Usage: user: CurrentUser = Depends(require_platform_admin)
+    """
+    result = await db.execute(
+        text("SELECT is_platform_admin FROM users WHERE keycloak_id = :kid"),
+        {"kid": user.user_id},
+    )
+    row = result.first()
+    if not row or not row[0]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform admin access required",
+        )
+    user.is_platform_admin = True
+    return user

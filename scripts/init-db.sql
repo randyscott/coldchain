@@ -33,13 +33,15 @@ CREATE TABLE IF NOT EXISTS users (
                     CHECK (role IN ('admin', 'manager', 'viewer')),
     phone           VARCHAR(50),               -- For SMS alerts
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_group_id ON users(group_id);
-CREATE INDEX idx_users_keycloak_id ON users(keycloak_id);
-CREATE INDEX idx_users_email ON users(email);
+CREATE UNIQUE INDEX IF NOT EXISTS users_group_email_unique ON users(group_id, email);
+CREATE INDEX IF NOT EXISTS idx_users_group_id ON users(group_id);
+CREATE INDEX IF NOT EXISTS idx_users_keycloak_id ON users(keycloak_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- =============================================================================
 -- SYSTEMS & DEVICES
@@ -344,13 +346,14 @@ INSERT INTO groups (id, name, slug) VALUES
     ('a0000000-0000-0000-0000-000000000001', 'Demo Organization', 'demo-org')
 ON CONFLICT (slug) DO NOTHING;
 
--- Create a demo admin user
-INSERT INTO users (id, group_id, email, display_name, role) VALUES
+-- Create a demo admin user (is_platform_admin = TRUE for demo purposes)
+INSERT INTO users (id, group_id, email, display_name, role, is_platform_admin) VALUES
     ('b0000000-0000-0000-0000-000000000001',
      'a0000000-0000-0000-0000-000000000001',
      'admin@demo.local',
      'Demo Admin',
-     'admin')
+     'admin',
+     TRUE)
 ON CONFLICT DO NOTHING;
 
 -- Create demo systems

@@ -109,6 +109,29 @@ args:
   - "--http-enabled=true"           # Keycloak speaks HTTP; TLS is terminated at the ingress
   - "--hostname=coldchain.yourdomain.com"
   - "--hostname-strict=false"       # Allows internal cluster traffic without hostname match
+  - "--hostname-admin=localhost"    # Admin console only reachable via port-forward (see below)
+```
+
+### Securing the Keycloak admin console
+
+The ingress routes `/auth` to Keycloak, which means `/auth/admin` would be
+publicly reachable without the `--hostname-admin` flag above.
+
+`--hostname-admin=localhost` tells Keycloak to reject admin console requests
+whose `Host` header does not match `localhost`. Traffic through the public
+ingress carries `Host: coldchain.yourdomain.com` and will be refused.
+
+> **Note:** This only locks down the admin UI (port 8080). The management port
+> (port 9000) is already cluster-internal — it serves the `/health/*` endpoints
+> used by the k8s liveness and readiness probes, not the admin console, so it
+> does not need further restriction.
+
+To access the admin console when needed, open a port-forward from your local
+machine:
+
+```bash
+kubectl port-forward -n coldchain svc/keycloak 8081:8081
+# Now open http://localhost:8081/auth/admin in your browser
 ```
 
 ---

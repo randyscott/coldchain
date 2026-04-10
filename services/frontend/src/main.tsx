@@ -10,6 +10,8 @@ import { SystemDetailPage } from './pages/SystemDetailPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { AlertRulesPage } from './pages/AlertRulesPage';
 import { DeviceProfilesPage } from './pages/DeviceProfilesPage';
+import { TeamPage } from './pages/TeamPage';
+import { SettingsPage } from './pages/SettingsPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -36,6 +38,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="rules" element={<AlertRulesPage />} />
               </Route>
               <Route path="/profiles" element={<DeviceProfilesPage />} />
+              <Route path="/team" element={<TeamPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

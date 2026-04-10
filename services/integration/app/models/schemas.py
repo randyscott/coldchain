@@ -10,6 +10,15 @@ from pydantic import BaseModel, Field
 
 
 # =============================================================================
+# Auth
+# =============================================================================
+
+class AuthSyncResponse(BaseModel):
+    """Returned by POST /auth/sync after upserting the user row."""
+    is_platform_admin: bool
+
+
+# =============================================================================
 # Groups
 # =============================================================================
 
@@ -18,6 +27,35 @@ class GroupOut(BaseModel):
     name: str
     slug: str
     created_at: datetime
+    updated_at: datetime
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+
+
+# =============================================================================
+# Users
+# =============================================================================
+
+class UserOut(BaseModel):
+    id: UUID
+    keycloak_id: Optional[str] = None
+    group_id: UUID
+    email: str
+    display_name: str
+    role: str
+    phone: Optional[str] = None
+    is_active: bool
+    is_platform_admin: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserUpdate(BaseModel):
+    role: Optional[str] = Field(default=None, pattern="^(admin|manager|viewer)$")
+    is_active: Optional[bool] = None
+    phone: Optional[str] = None
 
 
 # =============================================================================

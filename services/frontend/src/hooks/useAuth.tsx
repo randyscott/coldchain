@@ -9,6 +9,7 @@ interface User {
   name: string;
   group_id: string;
   role: string;
+  isPlatformAdmin: boolean;
   token: string;
 }
 
@@ -79,17 +80,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (code && url.pathname === '/auth/callback') {
       exchangeCode(code)
-        .then(({ access_token }) => {
-          const claims = parseJwt(access_token);
-          setUser({
-            id: claims.sub as string,
-            email: claims.email as string,
-            name: (claims.preferred_username || claims.email) as string,
-            group_id: claims.group_id as string,
-            role: (claims.role || 'viewer') as string,
-            token: access_token,
-          });
+        .then(async ({ access_token }) => {
           sessionStorage.setItem('access_token', access_token);
+
+          // Upsert user in DB; returns is_platform_admin (can't be in JWT).
+          let isPlatformAdmin = false;
+          try {
+            const res = await fetch('/api/v1/auth/sync', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${access_token}` },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              isPlatformAdmin = data.is_platform_admin ?? false;
+            }
+          } catch {
+            // Non-fatal: app works normally without the platform-admin flag.
+          }
+          sessionStorage.setItem('is_platform_admin', String(isPlatformAdmin));
+
           window.location.replace('/');
         })
         .catch((err) => {
@@ -110,13 +119,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               name: (claims.preferred_username || claims.email) as string,
               group_id: claims.group_id as string,
               role: (claims.role || 'viewer') as string,
+              isPlatformAdmin: sessionStorage.getItem('is_platform_admin') === 'true',
               token: storedToken,
             });
           } else {
             sessionStorage.removeItem('access_token');
+            sessionStorage.removeItem('is_platform_admin');
           }
         } catch {
           sessionStorage.removeItem('access_token');
+          sessionStorage.removeItem('is_platform_admin');
         }
       }
       setIsLoading(false);
@@ -130,6 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('is_platform_admin');
+    localStorage.removeItem('as_group_id');
     const logoutUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout`;
     const params = new URLSearchParams({
       client_id: KEYCLOAK_CLIENT_ID,

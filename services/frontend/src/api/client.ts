@@ -5,6 +5,23 @@
 
 const BASE = '/api/v1';
 
+// Active group for platform-admin impersonation.
+// Stored in localStorage so it survives page refresh.
+let _asGroupId: string | null = localStorage.getItem('as_group_id');
+
+export function setAsGroup(id: string | null) {
+  _asGroupId = id;
+  if (id) {
+    localStorage.setItem('as_group_id', id);
+  } else {
+    localStorage.removeItem('as_group_id');
+  }
+}
+
+export function getAsGroup(): string | null {
+  return _asGroupId;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = sessionStorage.getItem('access_token');
   const headers: Record<string, string> = {
@@ -12,6 +29,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (_asGroupId) {
+    headers['X-As-Group'] = _asGroupId;
   }
   const res = await fetch(`${BASE}${path}`, {
     headers,
@@ -185,6 +205,34 @@ export interface AlertEvent {
   system_name: string | null;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamUser {
+  id: string;
+  keycloak_id: string | null;
+  group_id: string;
+  email: string;
+  display_name: string;
+  role: 'admin' | 'manager' | 'viewer';
+  phone: string | null;
+  is_active: boolean;
+  is_platform_admin: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamUserUpdate {
+  role?: 'admin' | 'manager' | 'viewer';
+  is_active?: boolean;
+  phone?: string | null;
+}
+
 export interface AlertRule {
   id: string;
   system_id: string;
@@ -240,6 +288,19 @@ export const api = {
     request<System>(`/systems/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteSystem: (id: string) =>
     request<void>(`/systems/${id}`, { method: 'DELETE' }),
+
+  // Groups
+  getMyGroup: () => request<Group>('/groups/me'),
+  updateMyGroup: (data: { name: string }) =>
+    request<Group>('/groups/me', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Platform admin
+  getAllGroups: () => request<Group[]>('/admin/groups'),
+
+  // Users (team management)
+  getUsers: () => request<TeamUser[]>('/users'),
+  updateUser: (id: string, data: TeamUserUpdate) =>
+    request<TeamUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Device profiles
   getDeviceProfiles: () => request<DeviceProfile[]>('/devices/profiles'),

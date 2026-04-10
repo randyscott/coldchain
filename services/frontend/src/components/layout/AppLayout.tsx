@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Thermometer, LayoutDashboard, Bell, LogOut, Cpu } from 'lucide-react';
+import { Thermometer, LayoutDashboard, Bell, LogOut, Cpu, Users, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
 import { useAlertStream } from '../../hooks/useAlertStream';
 import { useActiveAlertCount } from '../../hooks/useActiveAlertCount';
+import { GroupSwitcher } from './GroupSwitcher';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -26,6 +27,9 @@ export function AppLayout() {
                 </h1>
               </div>
             </div>
+
+            {/* Group switcher (platform admins only) */}
+            {user?.isPlatformAdmin && <GroupSwitcher />}
 
             {/* Navigation */}
             <nav className="flex items-center gap-1">
@@ -64,6 +68,26 @@ export function AppLayout() {
                   Profiles
                 </NavLink>
               )}
+              {(user?.role === 'admin' || user?.role === 'manager') && (
+                <NavLink
+                  to="/team"
+                  className={({ isActive }) =>
+                    clsx(isActive ? 'nav-link-active' : 'nav-link', 'flex items-center gap-2')
+                  }
+                >
+                  <Users className="w-4 h-4" />
+                  Team
+                </NavLink>
+              )}
+              <NavLink
+                to="/settings"
+                className={({ isActive }) =>
+                  clsx(isActive ? 'nav-link-active' : 'nav-link', 'flex items-center gap-2')
+                }
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </NavLink>
             </nav>
 
             {/* User */}
